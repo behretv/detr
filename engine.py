@@ -8,6 +8,7 @@ import sys
 from typing import Iterable
 
 import torch
+from tqdm import tqdm
 
 import util.misc as utils
 from datasets.coco_eval import CocoEvaluator
@@ -45,8 +46,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         loss_value = losses_reduced_scaled.item()
 
         if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            print(loss_dict_reduced)
+            tqdm.write("Loss is {}, stopping training".format(loss_value))
+            tqdm.write(str(loss_dict_reduced))
             sys.exit(1)
 
         optimizer.zero_grad()
@@ -60,7 +61,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    tqdm.write("Averaged stats: " + str(metric_logger))
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
@@ -125,7 +126,7 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    tqdm.write("Averaged stats: " + str(metric_logger))
     if coco_evaluator is not None:
         coco_evaluator.synchronize_between_processes()
     if panoptic_evaluator is not None:
