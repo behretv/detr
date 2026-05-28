@@ -1,10 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent / "detr"))
+
 import argparse
 import datetime
 import json
 import random
 import time
-from pathlib import Path
 
 import numpy as np
 import torch

@@ -30,6 +30,9 @@ detr-train = "main:main"
 where = ["."]
 include = ["datasets*", "models*", "util*"]
 
+[tool.pytest.ini_options]
+pythonpath = ["detr"]
+
 [tool.flake8]
 max-line-length = 120
 ignore = ["F401", "E402", "F403", "W503", "W504"]
