@@ -28,7 +28,7 @@ detr-train = "main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["datasets*", "models*", "util*"]
+include = ["detr*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["detr"]
