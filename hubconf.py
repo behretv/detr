@@ -4,7 +4,7 @@ import torch
 from models.backbone import Backbone, Joiner
 from models.detr import DETR, PostProcess
 from models.position_encoding import PositionEmbeddingSine
-from models.segmentation import DETRsegm, PostProcessPanoptic
+from models.segmentation import DETRsegm
 from models.transformer import Transformer
 
 dependencies = ["torch", "torchvision"]
@@ -92,77 +92,4 @@ def detr_resnet101_dc5(pretrained=False, num_classes=91, return_postprocessor=Fa
         model.load_state_dict(checkpoint["model"])
     if return_postprocessor:
         return model, PostProcess()
-    return model
-
-
-def detr_resnet50_panoptic(
-    pretrained=False, num_classes=250, threshold=0.85, return_postprocessor=False
-):
-    """
-    DETR R50 with 6 encoder and 6 decoder layers.
-    Achieves 43.4 PQ on COCO val5k.
-
-   threshold is the minimum confidence required for keeping segments in the prediction
-    """
-    model = _make_detr("resnet50", dilation=False, num_classes=num_classes, mask=True)
-    is_thing_map = {i: i <= 90 for i in range(250)}
-    if pretrained:
-        checkpoint = torch.hub.load_state_dict_from_url(
-            url="https://dl.fbaipublicfiles.com/detr/detr-r50-panoptic-00ce5173.pth",
-            map_location="cpu",
-            check_hash=True,
-        )
-        model.load_state_dict(checkpoint["model"])
-    if return_postprocessor:
-        return model, PostProcessPanoptic(is_thing_map, threshold=threshold)
-    return model
-
-
-def detr_resnet50_dc5_panoptic(
-    pretrained=False, num_classes=250, threshold=0.85, return_postprocessor=False
-):
-    """
-    DETR-DC5 R50 with 6 encoder and 6 decoder layers.
-
-    The last block of ResNet-50 has dilation to increase
-    output resolution.
-    Achieves 44.6 on COCO val5k.
-
-   threshold is the minimum confidence required for keeping segments in the prediction
-    """
-    model = _make_detr("resnet50", dilation=True, num_classes=num_classes, mask=True)
-    is_thing_map = {i: i <= 90 for i in range(250)}
-    if pretrained:
-        checkpoint = torch.hub.load_state_dict_from_url(
-            url="https://dl.fbaipublicfiles.com/detr/detr-r50-dc5-panoptic-da08f1b1.pth",
-            map_location="cpu",
-            check_hash=True,
-        )
-        model.load_state_dict(checkpoint["model"])
-    if return_postprocessor:
-        return model, PostProcessPanoptic(is_thing_map, threshold=threshold)
-    return model
-
-
-def detr_resnet101_panoptic(
-    pretrained=False, num_classes=250, threshold=0.85, return_postprocessor=False
-):
-    """
-    DETR-DC5 R101 with 6 encoder and 6 decoder layers.
-
-    Achieves 45.1 PQ on COCO val5k.
-
-   threshold is the minimum confidence required for keeping segments in the prediction
-    """
-    model = _make_detr("resnet101", dilation=False, num_classes=num_classes, mask=True)
-    is_thing_map = {i: i <= 90 for i in range(250)}
-    if pretrained:
-        checkpoint = torch.hub.load_state_dict_from_url(
-            url="https://dl.fbaipublicfiles.com/detr/detr-r101-panoptic-40021d53.pth",
-            map_location="cpu",
-            check_hash=True,
-        )
-        model.load_state_dict(checkpoint["model"])
-    if return_postprocessor:
-        return model, PostProcessPanoptic(is_thing_map, threshold=threshold)
     return model

@@ -1,9 +1,9 @@
 {
-  "name": "computer-vision",
   "image": "hmcvlab/computer-vision:latest",
   "runArgs": [
     "--gpus=all",
-    "--shm-size=8g"
+    "--shm-size=8g",
+    "--rm"
   ],
   "postCreateCommand": "pip install -e '.[coco]'",
   "remoteUser": "ubuntu",
