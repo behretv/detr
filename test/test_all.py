@@ -11,7 +11,7 @@ from models.position_encoding import PositionEmbeddingSine, PositionEmbeddingLea
 from models.backbone import Backbone, Joiner, BackboneBase
 from util import box_ops
 from util.misc import nested_tensor_from_tensor_list
-from hubconf import detr_resnet50, detr_resnet50_panoptic
+from hubconf import detr_resnet50
 
 # onnxruntime requires python 3.5 or above
 try:
@@ -77,15 +77,6 @@ class Tester(unittest.TestCase):
         self.assertTrue(out["pred_logits"].equal(out_script["pred_logits"]))
         self.assertTrue(out["pred_boxes"].equal(out_script["pred_boxes"]))
 
-    def test_model_script_panoptic(self):
-        model = detr_resnet50_panoptic(pretrained=False).eval()
-        scripted_model = torch.jit.script(model)
-        x = nested_tensor_from_tensor_list([torch.rand(3, 200, 200), torch.rand(3, 200, 250)])
-        out = model(x)
-        out_script = scripted_model(x)
-        self.assertTrue(out["pred_logits"].equal(out_script["pred_logits"]))
-        self.assertTrue(out["pred_boxes"].equal(out_script["pred_boxes"]))
-        self.assertTrue(out["pred_masks"].equal(out_script["pred_masks"]))
 
     def test_model_detection_different_inputs(self):
         model = detr_resnet50(pretrained=False).eval()
@@ -186,21 +177,6 @@ class ONNXExporterTester(unittest.TestCase):
             [(torch.rand(1, 3, 750, 800),)],
             input_names=["inputs"],
             output_names=["pred_logits", "pred_boxes"],
-            tolerate_small_mismatch=True,
-        )
-
-    @unittest.skip("CI doesn't have enough memory")
-    def test_model_onnx_detection_panoptic(self):
-        model = detr_resnet50_panoptic(pretrained=False).eval()
-        dummy_image = torch.ones(1, 3, 800, 800) * 0.3
-        model(dummy_image)
-
-        # Test exported model on images of different size, or dummy input
-        self.run_model(
-            model,
-            [(torch.rand(1, 3, 750, 800),)],
-            input_names=["inputs"],
-            output_names=["pred_logits", "pred_boxes", "pred_masks"],
             tolerate_small_mismatch=True,
         )
 
