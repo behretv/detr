@@ -5,6 +5,7 @@ DETR model and criterion classes.
 
 import torch
 import torch.nn.functional as F
+from _types import LossParameters, ModelParameters, RunParameters, TrainParameters
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
 from util import box_ops
@@ -345,7 +346,12 @@ class MLP(nn.Module):
         return x
 
 
-def build(args):
+def build(
+    model_params: ModelParameters,
+    loss_params: LossParameters,
+    train_params: TrainParameters,
+    run_params: RunParameters,
+):
     # the `num_classes` naming here is somewhat misleading.
     # it indeed corresponds to `max_obj_id + 1`, where max_obj_id
     # is the maximum id for a class in your dataset. For example,
@@ -355,47 +361,47 @@ def build(args):
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
     num_classes = 91
-    device = torch.device(args.device)
+    device = torch.device(run_params.device)
 
-    backbone = build_backbone(args)
+    backbone = build_backbone(model_params, train_params)
 
-    transformer = build_transformer(args)
+    transformer = build_transformer(model_params)
 
     model = DETR(
         backbone,
         transformer,
         num_classes=num_classes,
-        num_queries=args.num_queries,
-        aux_loss=args.aux_loss,
+        num_queries=model_params.num_queries,
+        aux_loss=model_params.aux_loss,
     )
-    if args.masks:
-        model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
-    matcher = build_matcher(args)
-    weight_dict = {"loss_ce": 1, "loss_bbox": args.bbox_loss_coef}
-    weight_dict["loss_giou"] = args.giou_loss_coef
-    if args.masks:
-        weight_dict["loss_mask"] = args.mask_loss_coef
-        weight_dict["loss_dice"] = args.dice_loss_coef
+    if model_params.masks:
+        model = DETRsegm(model, freeze_detr=(model_params.frozen_weights is not None))
+    matcher = build_matcher(loss_params)
+    weight_dict = {"loss_ce": 1, "loss_bbox": loss_params.bbox_loss_coef}
+    weight_dict["loss_giou"] = loss_params.giou_loss_coef
+    if model_params.masks:
+        weight_dict["loss_mask"] = loss_params.mask_loss_coef
+        weight_dict["loss_dice"] = loss_params.dice_loss_coef
     # TODO this is a hack
-    if args.aux_loss:
+    if model_params.aux_loss:
         aux_weight_dict = {}
-        for i in range(args.dec_layers - 1):
+        for i in range(model_params.dec_layers - 1):
             aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
         weight_dict.update(aux_weight_dict)
 
     losses = ["labels", "boxes", "cardinality"]
-    if args.masks:
+    if model_params.masks:
         losses += ["masks"]
     criterion = SetCriterion(
         num_classes,
         matcher=matcher,
         weight_dict=weight_dict,
-        eos_coef=args.eos_coef,
+        eos_coef=loss_params.eos_coef,
         losses=losses,
     )
     criterion.to(device)
     postprocessors = {"bbox": PostProcess()}
-    if args.masks:
+    if model_params.masks:
         postprocessors["segm"] = PostProcessSegm()
 
     return model, criterion, postprocessors

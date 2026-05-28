@@ -13,7 +13,8 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
-from torch import nn, Tensor
+from _types import ModelParameters
+from torch import Tensor, nn
 
 
 class Transformer(nn.Module):
@@ -366,15 +367,15 @@ def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_transformer(args):
+def build_transformer(params: ModelParameters):
     return Transformer(
-        d_model=args.hidden_dim,
-        dropout=args.dropout,
-        nhead=args.nheads,
-        dim_feedforward=args.dim_feedforward,
-        num_encoder_layers=args.enc_layers,
-        num_decoder_layers=args.dec_layers,
-        normalize_before=args.pre_norm,
+        d_model=params.hidden_dim,
+        dropout=params.dropout,
+        nhead=params.nheads,
+        dim_feedforward=params.dim_feedforward,
+        num_encoder_layers=params.enc_layers,
+        num_decoder_layers=params.dec_layers,
+        normalize_before=params.pre_norm,
         return_intermediate_dec=True,
     )
 

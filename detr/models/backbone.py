@@ -3,13 +3,14 @@
 Backbone modules.
 """
 
+from typing import Dict, List
+
 import torch
 import torch.nn.functional as F
 import torchvision
+from _types import ModelParameters, TrainParameters
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
-from typing import Dict, List
-
 from util.misc import NestedTensor, is_main_process
 
 from .position_encoding import build_position_encoding
@@ -138,12 +139,15 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(args):
-    position_embedding = build_position_encoding(args)
-    train_backbone = args.lr_backbone > 0
-    return_interm_layers = args.masks
+def build_backbone(model_params: ModelParameters, train_params: TrainParameters):
+    position_embedding = build_position_encoding(model_params)
+    train_backbone = train_params.lr_backbone > 0
+    return_interm_layers = model_params.masks
     backbone = Backbone(
-        args.backbone, train_backbone, return_interm_layers, args.dilation
+        model_params.backbone,
+        train_backbone,
+        return_interm_layers,
+        model_params.dilation,
     )
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels

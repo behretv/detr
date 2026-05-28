@@ -1,6 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import torch.utils.data
 import torchvision
+from _types import DataParameters, ModelParameters
 
 from .coco import build as build_coco
 
@@ -15,5 +16,7 @@ def get_coco_api_from_dataset(dataset):
         return dataset.coco
 
 
-def build_dataset(image_set, args):
-    return build_coco(image_set, args)
+def build_dataset(
+    image_set: str, data_params: DataParameters, model_params: ModelParameters
+):
+    return build_coco(image_set, data_params, model_params)

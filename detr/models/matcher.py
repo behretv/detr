@@ -4,6 +4,7 @@ Modules to compute the matching cost and solve the corresponding LSAP.
 """
 
 import torch
+from _types import LossParameters
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
@@ -103,9 +104,9 @@ class HungarianMatcher(nn.Module):
         ]
 
 
-def build_matcher(args):
+def build_matcher(params: LossParameters):
     return HungarianMatcher(
-        cost_class=args.set_cost_class,
-        cost_bbox=args.set_cost_bbox,
-        cost_giou=args.set_cost_giou,
+        cost_class=params.set_cost_class,
+        cost_bbox=params.set_cost_bbox,
+        cost_giou=params.set_cost_giou,
     )

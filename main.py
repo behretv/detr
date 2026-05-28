@@ -12,38 +12,57 @@ import time
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
 import util.misc as utils
+from _types import (
+    DataParameters,
+    LossParameters,
+    ModelParameters,
+    RunParameters,
+    TrainParameters,
+)
 from datasets import build_dataset, get_coco_api_from_dataset
 from engine import evaluate, train_one_epoch
 from models import build_model
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+_TRAIN = TrainParameters()
+_MODEL = ModelParameters()
+_LOSS = LossParameters()
+_DATA = DataParameters()
+_RUN = RunParameters()
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser("Set transformer detector", add_help=False)
-    parser.add_argument("--lr", default=1e-4, type=float)
-    parser.add_argument("--lr_backbone", default=1e-5, type=float)
-    parser.add_argument("--batch_size", default=2, type=int)
-    parser.add_argument("--weight_decay", default=1e-4, type=float)
-    parser.add_argument("--epochs", default=2, type=int)
-    parser.add_argument("--lr_drop", default=40, type=int)
+
+    # Training
+    parser.add_argument("--lr", default=_TRAIN.lr, type=float)
+    parser.add_argument("--lr_backbone", default=_TRAIN.lr_backbone, type=float)
+    parser.add_argument("--batch_size", default=_TRAIN.batch_size, type=int)
+    parser.add_argument("--weight_decay", default=_TRAIN.weight_decay, type=float)
+    parser.add_argument("--epochs", default=_TRAIN.epochs, type=int)
+    parser.add_argument("--lr_drop", default=_TRAIN.lr_drop, type=int)
     parser.add_argument(
-        "--clip_max_norm", default=0.1, type=float, help="gradient clipping max norm"
+        "--clip_max_norm",
+        default=_TRAIN.clip_max_norm,
+        type=float,
+        help="gradient clipping max norm",
     )
+    parser.add_argument("--seed", default=_TRAIN.seed, type=int)
+    parser.add_argument("--num_workers", default=_TRAIN.num_workers, type=int)
 
     # Model parameters
     parser.add_argument(
         "--frozen_weights",
         type=str,
-        default=None,
+        default=_MODEL.frozen_weights,
         help="Path to the pretrained model. If set, only the mask head will be trained",
     )
     # * Backbone
     parser.add_argument(
         "--backbone",
-        default="resnet50",
+        default=_MODEL.backbone,
         type=str,
         help="Name of the convolutional backbone to use",
     )
@@ -54,7 +73,7 @@ def get_args_parser():
     )
     parser.add_argument(
         "--position_embedding",
-        default="sine",
+        default=_MODEL.position_embedding,
         type=str,
         choices=("sine", "learned"),
         help="Type of positional embedding to use on top of the image features",
@@ -63,39 +82,45 @@ def get_args_parser():
     # * Transformer
     parser.add_argument(
         "--enc_layers",
-        default=6,
+        default=_MODEL.enc_layers,
         type=int,
         help="Number of encoding layers in the transformer",
     )
     parser.add_argument(
         "--dec_layers",
-        default=6,
+        default=_MODEL.dec_layers,
         type=int,
         help="Number of decoding layers in the transformer",
     )
     parser.add_argument(
         "--dim_feedforward",
-        default=2048,
+        default=_MODEL.dim_feedforward,
         type=int,
         help="Intermediate size of the feedforward layers in the transformer blocks",
     )
     parser.add_argument(
         "--hidden_dim",
-        default=256,
+        default=_MODEL.hidden_dim,
         type=int,
         help="Size of the embeddings (dimension of the transformer)",
     )
     parser.add_argument(
-        "--dropout", default=0.1, type=float, help="Dropout applied in the transformer"
+        "--dropout",
+        default=_MODEL.dropout,
+        type=float,
+        help="Dropout applied in the transformer",
     )
     parser.add_argument(
         "--nheads",
-        default=8,
+        default=_MODEL.nheads,
         type=int,
         help="Number of attention heads inside the transformer's attentions",
     )
     parser.add_argument(
-        "--num_queries", default=100, type=int, help="Number of query slots"
+        "--num_queries",
+        default=_MODEL.num_queries,
+        type=int,
+        help="Number of query slots",
     )
     parser.add_argument("--pre_norm", action="store_true")
 
@@ -116,70 +141,126 @@ def get_args_parser():
     # * Matcher
     parser.add_argument(
         "--set_cost_class",
-        default=1,
+        default=_LOSS.set_cost_class,
         type=float,
         help="Class coefficient in the matching cost",
     )
     parser.add_argument(
         "--set_cost_bbox",
-        default=5,
+        default=_LOSS.set_cost_bbox,
         type=float,
         help="L1 box coefficient in the matching cost",
     )
     parser.add_argument(
         "--set_cost_giou",
-        default=2,
+        default=_LOSS.set_cost_giou,
         type=float,
         help="giou box coefficient in the matching cost",
     )
     # * Loss coefficients
-    parser.add_argument("--mask_loss_coef", default=1, type=float)
-    parser.add_argument("--dice_loss_coef", default=1, type=float)
-    parser.add_argument("--bbox_loss_coef", default=5, type=float)
-    parser.add_argument("--giou_loss_coef", default=2, type=float)
+    parser.add_argument("--mask_loss_coef", default=_LOSS.mask_loss_coef, type=float)
+    parser.add_argument("--dice_loss_coef", default=_LOSS.dice_loss_coef, type=float)
+    parser.add_argument("--bbox_loss_coef", default=_LOSS.bbox_loss_coef, type=float)
+    parser.add_argument("--giou_loss_coef", default=_LOSS.giou_loss_coef, type=float)
     parser.add_argument(
         "--eos_coef",
-        default=0.1,
+        default=_LOSS.eos_coef,
         type=float,
         help="Relative classification weight of the no-object class",
     )
 
-    # dataset parameters
-    parser.add_argument("--coco_path", type=str)
+    # Dataset
+    parser.add_argument("--coco_path", default=_DATA.coco_path, type=str)
     parser.add_argument("--remove_difficult", action="store_true")
 
+    # Run
     parser.add_argument(
-        "--output_dir", default="", help="path where to save, empty for no saving"
+        "--output_dir",
+        default=_RUN.output_dir,
+        help="path where to save, empty for no saving",
     )
     parser.add_argument(
-        "--device", default="cuda", help="device to use for training / testing"
+        "--device", default=_RUN.device, help="device to use for training / testing"
     )
-    parser.add_argument("--seed", default=42, type=int)
-    parser.add_argument("--resume", default="", help="resume from checkpoint")
+    parser.add_argument("--resume", default=_RUN.resume, help="resume from checkpoint")
     parser.add_argument(
-        "--start_epoch", default=0, type=int, metavar="N", help="start epoch"
+        "--start_epoch",
+        default=_RUN.start_epoch,
+        type=int,
+        metavar="N",
+        help="start epoch",
     )
     parser.add_argument("--eval", action="store_true")
-    parser.add_argument("--num_workers", default=2, type=int)
 
     return parser
 
 
 def main(args):
+    train_params = TrainParameters(
+        lr=args.lr,
+        lr_backbone=args.lr_backbone,
+        batch_size=args.batch_size,
+        weight_decay=args.weight_decay,
+        epochs=args.epochs,
+        lr_drop=args.lr_drop,
+        clip_max_norm=args.clip_max_norm,
+        seed=args.seed,
+        num_workers=args.num_workers,
+    )
+    model_params = ModelParameters(
+        backbone=args.backbone,
+        dilation=args.dilation,
+        position_embedding=args.position_embedding,
+        enc_layers=args.enc_layers,
+        dec_layers=args.dec_layers,
+        dim_feedforward=args.dim_feedforward,
+        hidden_dim=args.hidden_dim,
+        dropout=args.dropout,
+        nheads=args.nheads,
+        num_queries=args.num_queries,
+        pre_norm=args.pre_norm,
+        masks=args.masks,
+        frozen_weights=args.frozen_weights,
+        aux_loss=args.aux_loss,
+    )
+    loss_params = LossParameters(
+        set_cost_class=args.set_cost_class,
+        set_cost_bbox=args.set_cost_bbox,
+        set_cost_giou=args.set_cost_giou,
+        mask_loss_coef=args.mask_loss_coef,
+        dice_loss_coef=args.dice_loss_coef,
+        bbox_loss_coef=args.bbox_loss_coef,
+        giou_loss_coef=args.giou_loss_coef,
+        eos_coef=args.eos_coef,
+    )
+    data_params = DataParameters(
+        coco_path=args.coco_path,
+        remove_difficult=args.remove_difficult,
+    )
+    run_params = RunParameters(
+        output_dir=args.output_dir,
+        device=args.device,
+        resume=args.resume,
+        start_epoch=args.start_epoch,
+        eval=args.eval,
+    )
+
     print("git:\n  {}\n".format(utils.get_sha()))
 
-    if args.frozen_weights is not None:
-        assert args.masks, "Frozen training is meant for segmentation only"
-    print(args)
+    if model_params.frozen_weights is not None:
+        assert model_params.masks, "Frozen training is meant for segmentation only"
+    print(train_params, model_params, loss_params, data_params, run_params)
 
-    device = torch.device(args.device)
+    device = torch.device(run_params.device)
 
     # fix the seed for reproducibility
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    torch.manual_seed(train_params.seed)
+    np.random.seed(train_params.seed)
+    random.seed(train_params.seed)
 
-    model, criterion, postprocessors = build_model(args)
+    model, criterion, postprocessors = build_model(
+        model_params, loss_params, train_params, run_params
+    )
     model.to(device)
 
     model_without_ddp = model
@@ -200,65 +281,69 @@ def main(args):
                 for n, p in model_without_ddp.named_parameters()
                 if "backbone" in n and p.requires_grad
             ],
-            "lr": args.lr_backbone,
+            "lr": train_params.lr_backbone,
         },
     ]
     optimizer = torch.optim.AdamW(
-        param_dicts, lr=args.lr, weight_decay=args.weight_decay
+        param_dicts, lr=train_params.lr, weight_decay=train_params.weight_decay
     )
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, train_params.lr_drop)
 
-    dataset_train = build_dataset(image_set="train", args=args)
-    dataset_val = build_dataset(image_set="val", args=args)
+    dataset_train = build_dataset(
+        image_set="train", data_params=data_params, model_params=model_params
+    )
+    dataset_val = build_dataset(
+        image_set="val", data_params=data_params, model_params=model_params
+    )
 
     sampler_train = torch.utils.data.RandomSampler(dataset_train)
     sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
     batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, args.batch_size, drop_last=True
+        sampler_train, train_params.batch_size, drop_last=True
     )
 
     data_loader_train = DataLoader(
         dataset_train,
         batch_sampler=batch_sampler_train,
         collate_fn=utils.collate_fn,
-        num_workers=args.num_workers,
+        num_workers=train_params.num_workers,
     )
     data_loader_val = DataLoader(
         dataset_val,
-        args.batch_size,
+        train_params.batch_size,
         sampler=sampler_val,
         drop_last=False,
         collate_fn=utils.collate_fn,
-        num_workers=args.num_workers,
+        num_workers=train_params.num_workers,
     )
 
     base_ds = get_coco_api_from_dataset(dataset_val)
 
-    if args.frozen_weights is not None:
-        checkpoint = torch.load(args.frozen_weights, map_location="cpu")
+    if model_params.frozen_weights is not None:
+        checkpoint = torch.load(model_params.frozen_weights, map_location="cpu")
         model_without_ddp.detr.load_state_dict(checkpoint["model"])
 
-    output_dir = Path(args.output_dir)
-    if args.resume:
-        if args.resume.startswith("https"):
+    output_dir = Path(run_params.output_dir)
+    if run_params.resume:
+        if run_params.resume.startswith("https"):
             checkpoint = torch.hub.load_state_dict_from_url(
-                args.resume, map_location="cpu", check_hash=True
+                run_params.resume, map_location="cpu", check_hash=True
             )
         else:
-            checkpoint = torch.load(args.resume, map_location="cpu")
+            checkpoint = torch.load(run_params.resume, map_location="cpu")
         model_without_ddp.load_state_dict(checkpoint["model"])
         if (
-            not args.eval
+            not run_params.eval
             and "optimizer" in checkpoint
             and "lr_scheduler" in checkpoint
             and "epoch" in checkpoint
         ):
             optimizer.load_state_dict(checkpoint["optimizer"])
             lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
-            args.start_epoch = checkpoint["epoch"] + 1
+            run_params.start_epoch = checkpoint["epoch"] + 1
 
-    if args.eval:
+    if run_params.eval:
         test_stats, coco_evaluator = evaluate(
             model,
             criterion,
@@ -266,16 +351,18 @@ def main(args):
             data_loader_val,
             base_ds,
             device,
-            args.output_dir,
+            run_params.output_dir,
         )
-        if args.output_dir:
+        if run_params.output_dir:
             torch.save(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         return
 
     tqdm.write("Start training")
     start_time = time.time()
     epoch_bar = tqdm(
-        range(args.start_epoch, args.epochs), desc="Epochs", dynamic_ncols=True
+        range(run_params.start_epoch, train_params.epochs),
+        desc="Epochs",
+        dynamic_ncols=True,
     )
     for epoch in epoch_bar:
         train_stats = train_one_epoch(
@@ -285,13 +372,13 @@ def main(args):
             optimizer,
             device,
             epoch,
-            args.clip_max_norm,
+            train_params.clip_max_norm,
         )
         lr_scheduler.step()
-        if args.output_dir:
+        if run_params.output_dir:
             checkpoint_paths = [output_dir / "checkpoint.pth"]
             # extra checkpoint before LR drop and every 100 epochs
-            if (epoch + 1) % args.lr_drop == 0 or (epoch + 1) % 100 == 0:
+            if (epoch + 1) % train_params.lr_drop == 0 or (epoch + 1) % 100 == 0:
                 checkpoint_paths.append(output_dir / f"checkpoint{epoch:04}.pth")
             for checkpoint_path in checkpoint_paths:
                 torch.save(
@@ -300,7 +387,11 @@ def main(args):
                         "optimizer": optimizer.state_dict(),
                         "lr_scheduler": lr_scheduler.state_dict(),
                         "epoch": epoch,
-                        "args": args,
+                        "train_params": train_params,
+                        "model_params": model_params,
+                        "loss_params": loss_params,
+                        "data_params": data_params,
+                        "run_params": run_params,
                     },
                     checkpoint_path,
                 )
@@ -312,7 +403,7 @@ def main(args):
             data_loader_val,
             base_ds,
             device,
-            args.output_dir,
+            run_params.output_dir,
         )
 
         log_stats = {
@@ -322,7 +413,7 @@ def main(args):
             "n_parameters": n_parameters,
         }
 
-        if args.output_dir:
+        if run_params.output_dir:
             with (output_dir / "log.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
