@@ -321,8 +321,8 @@ class PostProcess(nn.Module):
         boxes = boxes * scale_fct[:, None, :]
 
         results = [
-            {"scores": s, "labels": l, "boxes": b}
-            for s, l, b in zip(scores, labels, boxes)
+            {"scores": score, "labels": label, "boxes": box}
+            for score, label, box in zip(scores, labels, boxes)
         ]
 
         return results

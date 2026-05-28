@@ -9,7 +9,7 @@ Copy-paste from torch.nn.Transformer with modifications:
 """
 
 import copy
-from typing import Optional, List
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
