@@ -245,7 +245,7 @@ def main(args):
         eval=args.eval,
     )
 
-    print("git:\n  {}\n".format(utils.get_sha()))
+    print(f"git:\n  {utils.get_sha()}\n")
 
     if model_params.frozen_weights is not None:
         assert model_params.masks, "Frozen training is meant for segmentation only"
@@ -432,7 +432,7 @@ def main(args):
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    tqdm.write("Training time {}".format(total_time_str))
+    tqdm.write(f"Training time {total_time_str}")
 
 
 if __name__ == "__main__":

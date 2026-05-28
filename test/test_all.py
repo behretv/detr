@@ -1,16 +1,29 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import io
 import unittest
-from typing import List
 
 import torch
-from hubconf import detr_resnet50
-from models.backbone import Backbone
+from models.backbone import Backbone, Joiner
+from models.detr import DETR
 from models.matcher import HungarianMatcher
 from models.position_encoding import PositionEmbeddingLearned, PositionEmbeddingSine
+from models.transformer import Transformer
 from torch import Tensor, nn
 from util import box_ops
 from util.misc import nested_tensor_from_tensor_list
+
+
+def detr_resnet50(pretrained=False):
+    hidden_dim = 256
+    backbone = Backbone(
+        "resnet50", train_backbone=True, return_interm_layers=False, dilation=False
+    )
+    pos_enc = PositionEmbeddingSine(hidden_dim // 2, normalize=True)
+    backbone_with_pos_enc = Joiner(backbone, pos_enc)
+    backbone_with_pos_enc.num_channels = backbone.num_channels
+    transformer = Transformer(d_model=hidden_dim, return_intermediate_dec=True)
+    return DETR(backbone_with_pos_enc, transformer, num_classes=91, num_queries=100)
+
 
 # onnxruntime requires python 3.5 or above
 try:
@@ -119,7 +132,7 @@ class Tester(unittest.TestCase):
                 super().__init__()
                 self.model = model
 
-            def forward(self, inputs: List[Tensor]):
+            def forward(self, inputs: list[Tensor]):
                 sample = nested_tensor_from_tensor_list(inputs)
                 return self.model(sample)
 

@@ -9,7 +9,6 @@ import PIL
 import torch
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
-
 from util.box_ops import box_xyxy_to_cxcywh
 from util.misc import interpolate
 
@@ -282,6 +281,6 @@ class Compose(object):
         format_string = self.__class__.__name__ + "("
         for t in self.transforms:
             format_string += "\n"
-            format_string += "    {0}".format(t)
+            format_string += f"    {t}"
         format_string += "\n)"
         return format_string

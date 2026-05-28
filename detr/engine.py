@@ -5,13 +5,12 @@ Train and eval functions used in main.py
 
 import math
 import sys
-from typing import Iterable
+from collections.abc import Iterable
 
 import torch
-from tqdm import tqdm
-
 import util.misc as utils
 from datasets.coco_eval import CocoEvaluator
+from tqdm import tqdm
 
 
 def train_one_epoch(
@@ -30,7 +29,7 @@ def train_one_epoch(
     metric_logger.add_meter(
         "class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}")
     )
-    header = "Epoch: [{}]".format(epoch)
+    header = f"Epoch: [{epoch}]"
     print_freq = 10
 
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
@@ -44,23 +43,15 @@ def train_one_epoch(
             loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict
         )
 
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = utils.reduce_dict(loss_dict)
-        loss_dict_reduced_unscaled = {
-            f"{k}_unscaled": v for k, v in loss_dict_reduced.items()
+        loss_dict_unscaled = {f"{k}_unscaled": v for k, v in loss_dict.items()}
+        loss_dict_scaled = {
+            k: v * weight_dict[k] for k, v in loss_dict.items() if k in weight_dict
         }
-        loss_dict_reduced_scaled = {
-            k: v * weight_dict[k]
-            for k, v in loss_dict_reduced.items()
-            if k in weight_dict
-        }
-        losses_reduced_scaled = sum(loss_dict_reduced_scaled.values())
-
-        loss_value = losses_reduced_scaled.item()
+        loss_value = sum(loss_dict_scaled.values()).item()
 
         if not math.isfinite(loss_value):
-            tqdm.write("Loss is {}, stopping training".format(loss_value))
-            tqdm.write(str(loss_dict_reduced))
+            tqdm.write(f"Loss is {loss_value}, stopping training")
+            tqdm.write(str(loss_dict))
             sys.exit(1)
 
         optimizer.zero_grad()
@@ -69,13 +60,9 @@ def train_one_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
         optimizer.step()
 
-        metric_logger.update(
-            loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled
-        )
-        metric_logger.update(class_error=loss_dict_reduced["class_error"])
+        metric_logger.update(loss=loss_value, **loss_dict_scaled, **loss_dict_unscaled)
+        metric_logger.update(class_error=loss_dict["class_error"])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
     tqdm.write("Averaged stats: " + str(metric_logger))
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
@@ -105,22 +92,16 @@ def evaluate(
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
 
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = utils.reduce_dict(loss_dict)
-        loss_dict_reduced_scaled = {
-            k: v * weight_dict[k]
-            for k, v in loss_dict_reduced.items()
-            if k in weight_dict
+        loss_dict_scaled = {
+            k: v * weight_dict[k] for k, v in loss_dict.items() if k in weight_dict
         }
-        loss_dict_reduced_unscaled = {
-            f"{k}_unscaled": v for k, v in loss_dict_reduced.items()
-        }
+        loss_dict_unscaled = {f"{k}_unscaled": v for k, v in loss_dict.items()}
         metric_logger.update(
-            loss=sum(loss_dict_reduced_scaled.values()),
-            **loss_dict_reduced_scaled,
-            **loss_dict_reduced_unscaled,
+            loss=sum(loss_dict_scaled.values()),
+            **loss_dict_scaled,
+            **loss_dict_unscaled,
         )
-        metric_logger.update(class_error=loss_dict_reduced["class_error"])
+        metric_logger.update(class_error=loss_dict["class_error"])
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors["bbox"](outputs, orig_target_sizes)
@@ -136,8 +117,6 @@ def evaluate(
         if coco_evaluator is not None:
             coco_evaluator.update(res)
 
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
     tqdm.write("Averaged stats: " + str(metric_logger))
     if coco_evaluator is not None:
         coco_evaluator.synchronize_between_processes()

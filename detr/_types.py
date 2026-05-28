@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -29,7 +28,7 @@ class ModelParameters:
     num_queries: int = 100
     pre_norm: bool = False
     masks: bool = False
-    frozen_weights: Optional[str] = None
+    frozen_weights: str | None = None
     aux_loss: bool = True
 
 
@@ -47,7 +46,7 @@ class LossParameters:
 
 @dataclass
 class DataParameters:
-    coco_path: Optional[str] = None
+    coco_path: str | None = None
     remove_difficult: bool = False
 
 

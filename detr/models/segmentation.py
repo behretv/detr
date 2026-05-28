@@ -5,15 +5,13 @@ This file provides the definition of the convolutional heads used to predict mas
 
 import io
 from collections import defaultdict
-from typing import List, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
-from PIL import Image
-
 import util.box_ops as box_ops
+from PIL import Image
+from torch import Tensor
 from util.misc import NestedTensor, interpolate, nested_tensor_from_tensor_list
 
 try:
@@ -119,7 +117,7 @@ class MaskHeadSmallConv(nn.Module):
                 nn.init.kaiming_uniform_(m.weight, a=1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x: Tensor, bbox_mask: Tensor, fpns: List[Tensor]):
+    def forward(self, x: Tensor, bbox_mask: Tensor, fpns: list[Tensor]):
         x = torch.cat([_expand(x, bbox_mask.shape[1]), bbox_mask.flatten(0, 1)], 1)
 
         x = self.lay1(x)
@@ -175,7 +173,7 @@ class MHAttentionMap(nn.Module):
         nn.init.xavier_uniform_(self.q_linear.weight)
         self.normalize_fact = float(hidden_dim / self.num_heads) ** -0.5
 
-    def forward(self, q, k, mask: Optional[Tensor] = None):
+    def forward(self, q, k, mask: Tensor | None = None):
         q = self.q_linear(q)
         k = F.conv2d(
             k, self.k_linear.weight.unsqueeze(-1).unsqueeze(-1), self.k_linear.bias

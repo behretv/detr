@@ -3,15 +3,13 @@
 Backbone modules.
 """
 
-from typing import Dict, List
-
 import torch
 import torch.nn.functional as F
 import torchvision
 from _types import ModelParameters, TrainParameters
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
-from util.misc import NestedTensor, is_main_process
+from util.misc import NestedTensor
 
 from .position_encoding import build_position_encoding
 
@@ -95,7 +93,7 @@ class BackboneBase(nn.Module):
 
     def forward(self, tensor_list: NestedTensor):
         xs = self.body(tensor_list.tensors)
-        out: Dict[str, NestedTensor] = {}
+        out: dict[str, NestedTensor] = {}
         for name, x in xs.items():
             m = tensor_list.mask
             assert m is not None
@@ -116,7 +114,7 @@ class Backbone(BackboneBase):
     ):
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            pretrained=is_main_process(),
+            pretrained=True,
             norm_layer=FrozenBatchNorm2d,
         )
         num_channels = 512 if name in ("resnet18", "resnet34") else 2048
@@ -129,7 +127,7 @@ class Joiner(nn.Sequential):
 
     def forward(self, tensor_list: NestedTensor):
         xs = self[0](tensor_list)
-        out: List[NestedTensor] = []
+        out: list[NestedTensor] = []
         pos = []
         for name, x in xs.items():
             out.append(x)

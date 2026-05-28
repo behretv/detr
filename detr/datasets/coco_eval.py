@@ -7,17 +7,15 @@ The difference is that there is less copy-pasting from pycocotools
 in the end of the file, as python3 can suppress prints with contextlib
 """
 
-import os
 import contextlib
 import copy
+import os
+
 import numpy as np
-import torch
-
-from pycocotools.cocoeval import COCOeval
-from pycocotools.coco import COCO
 import pycocotools.mask as mask_util
-
-from util.misc import all_gather
+import torch
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 
 
 class CocoEvaluator(object):
@@ -66,7 +64,7 @@ class CocoEvaluator(object):
 
     def summarize(self):
         for iou_type, coco_eval in self.coco_eval.items():
-            print("IoU metric: {}".format(iou_type))
+            print(f"IoU metric: {iou_type}")
             coco_eval.summarize()
 
     def prepare(self, predictions, iou_type):
@@ -77,7 +75,7 @@ class CocoEvaluator(object):
         elif iou_type == "keypoints":
             return self.prepare_for_coco_keypoint(predictions)
         else:
-            raise ValueError("Unknown iou type {}".format(iou_type))
+            raise ValueError(f"Unknown iou type {iou_type}")
 
     def prepare_for_coco_detection(self, predictions):
         coco_results = []
@@ -173,19 +171,8 @@ def convert_to_xywh(boxes):
 
 
 def merge(img_ids, eval_imgs):
-    all_img_ids = all_gather(img_ids)
-    all_eval_imgs = all_gather(eval_imgs)
-
-    merged_img_ids = []
-    for p in all_img_ids:
-        merged_img_ids.extend(p)
-
-    merged_eval_imgs = []
-    for p in all_eval_imgs:
-        merged_eval_imgs.append(p)
-
-    merged_img_ids = np.array(merged_img_ids)
-    merged_eval_imgs = np.concatenate(merged_eval_imgs, 2)
+    merged_img_ids = np.array(img_ids)
+    merged_eval_imgs = np.concatenate([eval_imgs], 2)
 
     # keep only unique (and in sorted order) images
     merged_img_ids, idx = np.unique(merged_img_ids, return_index=True)
@@ -221,9 +208,7 @@ def evaluate(self):
     # add backward compatibility if useSegm is specified in params
     if p.useSegm is not None:
         p.iouType = "segm" if p.useSegm == 1 else "bbox"
-        print(
-            "useSegm (deprecated) is not None. Running {} evaluation".format(p.iouType)
-        )
+        print(f"useSegm (deprecated) is not None. Running {p.iouType} evaluation")
     # print('Evaluate annotation type *{}*'.format(p.iouType))
     p.imgIds = list(np.unique(p.imgIds))
     if p.useCats:

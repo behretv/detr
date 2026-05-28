@@ -12,9 +12,7 @@ from util import box_ops
 from util.misc import (
     NestedTensor,
     accuracy,
-    get_world_size,
     interpolate,
-    is_dist_avail_and_initialized,
     nested_tensor_from_tensor_list,
 )
 
@@ -259,14 +257,7 @@ class SetCriterion(nn.Module):
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets)
 
-        # Compute the average number of target boxes accross all nodes, for normalization purposes
-        num_boxes = sum(len(t["labels"]) for t in targets)
-        num_boxes = torch.as_tensor(
-            [num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device
-        )
-        if is_dist_avail_and_initialized():
-            torch.distributed.all_reduce(num_boxes)
-        num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
+        num_boxes = max(sum(len(t["labels"]) for t in targets), 1)
 
         # Compute all the requested losses
         losses = {}
