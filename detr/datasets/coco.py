@@ -11,7 +11,7 @@ import datasets.transforms as T
 import torch
 import torch.utils.data
 import torchvision
-from _types import DataParameters, ModelParameters
+from params import DataParameters, ModelParameters
 from pycocotools import mask as coco_mask
 
 

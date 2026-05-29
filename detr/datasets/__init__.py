@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import torch.utils.data
 import torchvision
-from _types import DataParameters, ModelParameters
+from params import DataParameters, ModelParameters
 
 from .coco import build as build_coco
 

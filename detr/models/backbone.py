@@ -6,7 +6,7 @@ Backbone modules.
 import torch
 import torch.nn.functional as F
 import torchvision
-from _types import ModelParameters, TrainParameters
+from params import ModelParameters, TrainParameters
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
 from util.misc import NestedTensor

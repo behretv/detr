@@ -4,7 +4,7 @@ Modules to compute the matching cost and solve the corresponding LSAP.
 """
 
 import torch
-from _types import LossParameters
+from params import LossParameters
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou

@@ -6,7 +6,7 @@ Various positional encodings for the transformer.
 import math
 
 import torch
-from _types import ModelParameters
+from params import ModelParameters
 from torch import nn
 from util.misc import NestedTensor
 

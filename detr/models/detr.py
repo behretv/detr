@@ -5,7 +5,7 @@ DETR model and criterion classes.
 
 import torch
 import torch.nn.functional as F
-from _types import LossParameters, ModelParameters, RunParameters, TrainParameters
+from params import LossParameters, ModelParameters, RunParameters, TrainParameters
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
 from util import box_ops

@@ -1,9 +1,10 @@
-from ._types import (
+from .params import (
     DataParameters,
     LossParameters,
     ModelParameters,
     RunParameters,
     TrainParameters,
+    _add_dataclass_args,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "ModelParameters",
     "RunParameters",
     "TrainParameters",
+    "_add_dataclass_args",
 ]

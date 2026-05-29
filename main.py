@@ -13,237 +13,37 @@ import time
 import numpy as np
 import torch
 import util.misc as utils
-from _types import (
+from datasets import build_dataset, get_coco_api_from_dataset
+from engine import evaluate, train_one_epoch
+from models import build_model
+from params import (
     DataParameters,
     LossParameters,
     ModelParameters,
     RunParameters,
     TrainParameters,
+    _add_dataclass_args,
 )
-from datasets import build_dataset, get_coco_api_from_dataset
-from engine import evaluate, train_one_epoch
-from models import build_model
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
-_TRAIN = TrainParameters()
-_MODEL = ModelParameters()
-_LOSS = LossParameters()
-_DATA = DataParameters()
-_RUN = RunParameters()
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser("Set transformer detector", add_help=False)
-
-    # Training
-    parser.add_argument("--lr", default=_TRAIN.lr, type=float)
-    parser.add_argument("--lr_backbone", default=_TRAIN.lr_backbone, type=float)
-    parser.add_argument("--batch_size", default=_TRAIN.batch_size, type=int)
-    parser.add_argument("--weight_decay", default=_TRAIN.weight_decay, type=float)
-    parser.add_argument("--epochs", default=_TRAIN.epochs, type=int)
-    parser.add_argument("--lr_drop", default=_TRAIN.lr_drop, type=int)
-    parser.add_argument(
-        "--clip_max_norm",
-        default=_TRAIN.clip_max_norm,
-        type=float,
-        help="gradient clipping max norm",
-    )
-    parser.add_argument("--seed", default=_TRAIN.seed, type=int)
-    parser.add_argument("--num_workers", default=_TRAIN.num_workers, type=int)
-
-    # Model parameters
-    parser.add_argument(
-        "--frozen_weights",
-        type=str,
-        default=_MODEL.frozen_weights,
-        help="Path to the pretrained model. If set, only the mask head will be trained",
-    )
-    # * Backbone
-    parser.add_argument(
-        "--backbone",
-        default=_MODEL.backbone,
-        type=str,
-        help="Name of the convolutional backbone to use",
-    )
-    parser.add_argument(
-        "--dilation",
-        action="store_true",
-        help="If true, we replace stride with dilation in the last convolutional block (DC5)",
-    )
-    parser.add_argument(
-        "--position_embedding",
-        default=_MODEL.position_embedding,
-        type=str,
-        choices=("sine", "learned"),
-        help="Type of positional embedding to use on top of the image features",
-    )
-
-    # * Transformer
-    parser.add_argument(
-        "--enc_layers",
-        default=_MODEL.enc_layers,
-        type=int,
-        help="Number of encoding layers in the transformer",
-    )
-    parser.add_argument(
-        "--dec_layers",
-        default=_MODEL.dec_layers,
-        type=int,
-        help="Number of decoding layers in the transformer",
-    )
-    parser.add_argument(
-        "--dim_feedforward",
-        default=_MODEL.dim_feedforward,
-        type=int,
-        help="Intermediate size of the feedforward layers in the transformer blocks",
-    )
-    parser.add_argument(
-        "--hidden_dim",
-        default=_MODEL.hidden_dim,
-        type=int,
-        help="Size of the embeddings (dimension of the transformer)",
-    )
-    parser.add_argument(
-        "--dropout",
-        default=_MODEL.dropout,
-        type=float,
-        help="Dropout applied in the transformer",
-    )
-    parser.add_argument(
-        "--nheads",
-        default=_MODEL.nheads,
-        type=int,
-        help="Number of attention heads inside the transformer's attentions",
-    )
-    parser.add_argument(
-        "--num_queries",
-        default=_MODEL.num_queries,
-        type=int,
-        help="Number of query slots",
-    )
-    parser.add_argument("--pre_norm", action="store_true")
-
-    # * Segmentation
-    parser.add_argument(
-        "--masks",
-        action="store_true",
-        help="Train segmentation head if the flag is provided",
-    )
-
-    # Loss
-    parser.add_argument(
-        "--no_aux_loss",
-        dest="aux_loss",
-        action="store_false",
-        help="Disables auxiliary decoding losses (loss at each layer)",
-    )
-    # * Matcher
-    parser.add_argument(
-        "--set_cost_class",
-        default=_LOSS.set_cost_class,
-        type=float,
-        help="Class coefficient in the matching cost",
-    )
-    parser.add_argument(
-        "--set_cost_bbox",
-        default=_LOSS.set_cost_bbox,
-        type=float,
-        help="L1 box coefficient in the matching cost",
-    )
-    parser.add_argument(
-        "--set_cost_giou",
-        default=_LOSS.set_cost_giou,
-        type=float,
-        help="giou box coefficient in the matching cost",
-    )
-    # * Loss coefficients
-    parser.add_argument("--mask_loss_coef", default=_LOSS.mask_loss_coef, type=float)
-    parser.add_argument("--dice_loss_coef", default=_LOSS.dice_loss_coef, type=float)
-    parser.add_argument("--bbox_loss_coef", default=_LOSS.bbox_loss_coef, type=float)
-    parser.add_argument("--giou_loss_coef", default=_LOSS.giou_loss_coef, type=float)
-    parser.add_argument(
-        "--eos_coef",
-        default=_LOSS.eos_coef,
-        type=float,
-        help="Relative classification weight of the no-object class",
-    )
-
-    # Dataset
-    parser.add_argument("--coco_path", default=_DATA.coco_path, type=str)
-    parser.add_argument("--remove_difficult", action="store_true")
-
-    # Run
-    parser.add_argument(
-        "--output_dir",
-        default=_RUN.output_dir,
-        help="path where to save, empty for no saving",
-    )
-    parser.add_argument(
-        "--device", default=_RUN.device, help="device to use for training / testing"
-    )
-    parser.add_argument("--resume", default=_RUN.resume, help="resume from checkpoint")
-    parser.add_argument(
-        "--start_epoch",
-        default=_RUN.start_epoch,
-        type=int,
-        metavar="N",
-        help="start epoch",
-    )
-    parser.add_argument("--eval", action="store_true")
-
+    _add_dataclass_args(parser, TrainParameters)
+    _add_dataclass_args(parser, ModelParameters)
+    _add_dataclass_args(parser, LossParameters)
+    _add_dataclass_args(parser, DataParameters)
+    _add_dataclass_args(parser, RunParameters)
     return parser
 
 
 def main(args):
-    train_params = TrainParameters(
-        lr=args.lr,
-        lr_backbone=args.lr_backbone,
-        batch_size=args.batch_size,
-        weight_decay=args.weight_decay,
-        epochs=args.epochs,
-        lr_drop=args.lr_drop,
-        clip_max_norm=args.clip_max_norm,
-        seed=args.seed,
-        num_workers=args.num_workers,
-    )
-    model_params = ModelParameters(
-        backbone=args.backbone,
-        dilation=args.dilation,
-        position_embedding=args.position_embedding,
-        enc_layers=args.enc_layers,
-        dec_layers=args.dec_layers,
-        dim_feedforward=args.dim_feedforward,
-        hidden_dim=args.hidden_dim,
-        dropout=args.dropout,
-        nheads=args.nheads,
-        num_queries=args.num_queries,
-        pre_norm=args.pre_norm,
-        masks=args.masks,
-        frozen_weights=args.frozen_weights,
-        aux_loss=args.aux_loss,
-    )
-    loss_params = LossParameters(
-        set_cost_class=args.set_cost_class,
-        set_cost_bbox=args.set_cost_bbox,
-        set_cost_giou=args.set_cost_giou,
-        mask_loss_coef=args.mask_loss_coef,
-        dice_loss_coef=args.dice_loss_coef,
-        bbox_loss_coef=args.bbox_loss_coef,
-        giou_loss_coef=args.giou_loss_coef,
-        eos_coef=args.eos_coef,
-    )
-    data_params = DataParameters(
-        coco_path=args.coco_path,
-        remove_difficult=args.remove_difficult,
-    )
-    run_params = RunParameters(
-        output_dir=args.output_dir,
-        device=args.device,
-        resume=args.resume,
-        start_epoch=args.start_epoch,
-        eval=args.eval,
-    )
+    train_params = TrainParameters.from_args(args)
+    model_params = ModelParameters.from_args(args)
+    loss_params = LossParameters.from_args(args)
+    data_params = DataParameters.from_args(args)
+    run_params = RunParameters.from_args(args)
 
     print(f"git:\n  {utils.get_sha()}\n")
 
