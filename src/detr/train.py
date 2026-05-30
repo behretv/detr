@@ -48,7 +48,7 @@ def run(
     Parameters
     ----------
     bundle:
-        A :class:`~detr.model.Bundle` produced by ``build_model`` or
+        A :class:`~detr.model.Bundle` produced by ``Bundle.build`` or
         ``Bundle.load_from_file``.
     train_loader:
         DataLoader yielding ``(NestedTensor, targets)`` batches for training.

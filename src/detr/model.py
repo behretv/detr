@@ -147,14 +147,31 @@ class Bundle:
         )
         run_params = parameters.Run(device=resolved_device)
 
-        model_params: parameters.Model = checkpoint["model_params"]
-        loss_params: parameters.Loss = checkpoint["loss_params"]
-        train_params: parameters.Train = checkpoint["train_params"]
+        model_params: parameters.Model = (
+            checkpoint.get("model_params") or parameters.Model()
+        )
+        loss_params: parameters.Loss = (
+            checkpoint.get("loss_params") or parameters.Loss()
+        )
+        train_params: parameters.Train = (
+            checkpoint.get("train_params") or parameters.Train()
+        )
 
         model, criterion, postprocessors = build(
             model_params, loss_params, train_params, run_params
         )
-        model.load_state_dict(checkpoint["state_dict"])
+
+        state_dict = checkpoint.get("state_dict") or checkpoint.get("model")
+        if state_dict is None:
+            raise KeyError(
+                f"Checkpoint {file} has neither 'state_dict' nor 'model' key"
+            )
+        model.load_state_dict(state_dict)
+
+        logs: list[dict[str, Any]] = []
+        csv_file = file.with_suffix(".csv")
+        if csv_file.exists():
+            logs = pd.read_csv(csv_file).to_dict(orient="records")
 
         return cls(
             ai_model=model,
@@ -169,4 +186,5 @@ class Bundle:
             cats=checkpoint.get("cats", {}),
             device=resolved_device,
             with_augmentation=checkpoint.get("with_augmentation", False),
+            logs=logs,
         )

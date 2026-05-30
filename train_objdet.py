@@ -42,14 +42,16 @@ def main(args):
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    bundle = Bundle.build(
-        model_params=model_params,
-        loss_params=loss_params,
-        train_params=train_params,
-        run_params=run_params,
-        name=data_params.dataset_file,
-        source=run_params.resume or "",
-    )
+    if run_params.resume:
+        bundle = Bundle.load_from_file(run_params.resume, device=run_params.device)
+    else:
+        bundle = Bundle.build(
+            model_params=model_params,
+            loss_params=loss_params,
+            train_params=train_params,
+            run_params=run_params,
+            name=data_params.dataset_file,
+        )
 
     n_parameters = sum(
         p.numel() for p in bundle.ai_model.parameters() if p.requires_grad
@@ -84,13 +86,7 @@ def main(args):
     base_ds = dataset_val.coco_api()
 
     output_dir = Path(run_params.output_dir) if run_params.output_dir else None
-    if run_params.resume:
-        raw = torch.load(run_params.resume, map_location="cpu", weights_only=False)
-        # Support both Bundle exports (key: "state_dict") and raw checkpoints (key: "model")
-        state_dict = raw.get("state_dict", raw.get("model"))
-        bundle.ai_model.load_state_dict(state_dict)
-        if not run_params.eval and "epoch" in raw:
-            run_params.start_epoch = raw["epoch"] + 1
+    start_epoch = len(bundle.logs)
 
     bundle = train.run(
         bundle,
@@ -103,7 +99,7 @@ def main(args):
             weight_decay=train_params.weight_decay,
             lr_drop=train_params.lr_drop,
             clip_max_norm=train_params.clip_max_norm,
-            start_epoch=run_params.start_epoch,
+            start_epoch=start_epoch,
             output_dir=output_dir,
         ),
         base_ds=base_ds,
