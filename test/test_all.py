@@ -3,14 +3,18 @@ import io
 import unittest
 
 import torch
-from models.backbone import Backbone, Joiner
-from models.detr import DETR
-from models.matcher import HungarianMatcher
-from models.position_encoding import PositionEmbeddingLearned, PositionEmbeddingSine
-from models.transformer import Transformer
 from torch import Tensor, nn
-from util import box_ops
-from util.misc import nested_tensor_from_tensor_list
+
+from detr.models.backbone import Backbone, Joiner
+from detr.models.detr import DETR
+from detr.models.matcher import HungarianMatcher
+from detr.models.position_encoding import (
+    PositionEmbeddingLearned,
+    PositionEmbeddingSine,
+)
+from detr.models.transformer import Transformer
+from detr.util import box_ops
+from detr.util.misc import nested_tensor_from_tensor_list
 
 
 def detr_resnet50(pretrained=False):

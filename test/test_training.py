@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -7,11 +6,9 @@ import pytest
 import torch
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "detr"))
-
-from datasets import get_coco_api_from_dataset
-from datasets.coco import CocoDetection, build, make_coco_transforms
-from datasets.transforms import (
+from detr.data import get_coco_api_from_dataset
+from detr.data.coco import CocoDetection, build, make_coco_transforms
+from detr.data.transforms import (
     Compose,
     Normalize,
     RandomHorizontalFlip,
@@ -20,16 +17,16 @@ from datasets.transforms import (
     RandomSizeCrop,
     ToTensor,
 )
-from engine import evaluate, train_one_epoch
-from models import build_model
-from params import (
+from detr.engine import evaluate, train_one_epoch
+from detr.models import build_model
+from detr.params import (
     DataParameters,
     LossParameters,
     ModelParameters,
     RunParameters,
     TrainParameters,
 )
-from util.misc import collate_fn
+from detr.util.misc import collate_fn
 
 # ---------------------------------------------------------------------------
 # Helpers

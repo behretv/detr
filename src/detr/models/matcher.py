@@ -4,11 +4,11 @@ Modules to compute the matching cost and solve the corresponding LSAP.
 """
 
 import torch
-from params import LossParameters
+from detr.params import LossParameters
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
-from util.box_ops import box_cxcywh_to_xyxy
+from detr.util.box_ops import box_cxcywh_to_xyxy
 
 
 class HungarianMatcher(nn.Module):

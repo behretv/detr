@@ -12,7 +12,7 @@ import copy
 
 import torch
 import torch.nn.functional as F
-from params import ModelParameters
+from detr.params import ModelParameters
 from torch import Tensor, nn
 
 

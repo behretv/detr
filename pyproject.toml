@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "detr"
@@ -27,11 +27,10 @@ dev = ["flake8"]
 detr-train = "main:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["detr*"]
+where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["detr"]
+pythonpath = ["."]
 
 [tool.flake8]
 max-line-length = 120

@@ -8,8 +8,8 @@ import sys
 from collections.abc import Iterable
 
 import torch
-import util.misc as utils
-from datasets.coco_eval import CocoEvaluator
+import detr.util.misc as utils
+from detr.data.coco_eval import CocoEvaluator
 from tqdm import tqdm
 
 

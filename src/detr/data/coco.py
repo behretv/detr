@@ -7,11 +7,11 @@ Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references
 
 from pathlib import Path
 
-import datasets.transforms as T
+import detr.data.transforms as T
 import torch
 import torch.utils.data
 import torchvision
-from params import DataParameters, ModelParameters
+from detr.params import DataParameters, ModelParameters
 from pycocotools import mask as coco_mask
 
 

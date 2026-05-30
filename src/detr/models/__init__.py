@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-from params import LossParameters, ModelParameters, RunParameters, TrainParameters
+from detr.params import LossParameters, ModelParameters, RunParameters, TrainParameters
 
 from .detr import build
 

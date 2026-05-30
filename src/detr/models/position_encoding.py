@@ -6,9 +6,9 @@ Various positional encodings for the transformer.
 import math
 
 import torch
-from params import ModelParameters
+from detr.params import ModelParameters
 from torch import nn
-from util.misc import NestedTensor
+from detr.util.misc import NestedTensor
 
 
 class PositionEmbeddingSine(nn.Module):

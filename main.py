@@ -1,22 +1,21 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent / "detr"))
-
 import argparse
 import datetime
 import json
 import random
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
-import util.misc as utils
-from datasets import build_dataset, get_coco_api_from_dataset
-from engine import evaluate, train_one_epoch
-from models import build_model
-from params import (
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+import detr.util.misc as utils
+from detr.data import build_dataset, get_coco_api_from_dataset
+from detr.engine import evaluate, train_one_epoch
+from detr.models import build_model
+from detr.params import (
     DataParameters,
     LossParameters,
     ModelParameters,
@@ -24,8 +23,6 @@ from params import (
     TrainParameters,
     _add_dataclass_args,
 )
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 
 def get_args_parser():
