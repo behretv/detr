@@ -103,7 +103,7 @@ def main(args):
     output_dir = Path(run_params.output_dir) if run_params.output_dir else None
 
     if run_params.eval:
-        test_stats, coco_evaluator = evaluate(
+        evaluate(
             bundle.ai_model,
             bundle.criterion,
             bundle.postprocessors,
@@ -112,8 +112,6 @@ def main(args):
             device,
             str(output_dir) if output_dir else "",
         )
-        if output_dir:
-            torch.save(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         return
 
     train.run(

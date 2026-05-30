@@ -3,6 +3,7 @@
 This module is optional — it is only importable when ``onnxruntime`` is
 installed.  Removing it has no effect on training or inference.
 """
+
 from __future__ import annotations
 
 import io
@@ -71,11 +72,14 @@ def validate(
     flat_inputs, _ = torch.jit._flatten(inputs)
     flat_outputs, _ = torch.jit._flatten(outputs)
 
-    def to_numpy(t: torch.Tensor):
-        return t.detach().cpu().numpy() if t.requires_grad else t.cpu().numpy()
-
-    np_inputs = list(map(to_numpy, flat_inputs))
-    np_outputs = list(map(to_numpy, flat_outputs))
+    np_inputs = [
+        (t.detach().cpu().numpy() if t.requires_grad else t.cpu().numpy())
+        for t in flat_inputs
+    ]
+    np_outputs = [
+        (t.detach().cpu().numpy() if t.requires_grad else t.cpu().numpy())
+        for t in flat_outputs
+    ]
 
     ort_session = onnxruntime.InferenceSession(onnx_io.getvalue())
     ort_inputs = {

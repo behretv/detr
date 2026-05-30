@@ -7,13 +7,13 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
+from torchvision.ops.misc import interpolate
 
 import detr.parameters as parameters
 from detr.util import box_ops
 from detr.util.misc import (
     NestedTensor,
     accuracy,
-    interpolate,
     nested_tensor_from_tensor_list,
 )
 

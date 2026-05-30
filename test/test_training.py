@@ -17,8 +17,9 @@ from detr.data.transforms import (
     RandomSizeCrop,
     ToTensor,
 )
-from detr.engine import evaluate, train_one_epoch
+from detr.engine import evaluate
 from detr.model import Bundle
+from detr.train import train_one_epoch
 from detr.util.misc import collate_fn
 
 # ---------------------------------------------------------------------------
@@ -349,7 +350,7 @@ def test_evaluate_runs(model_bundle, coco_root, device):
     loader = torch.utils.data.DataLoader(
         ds, batch_size=2, collate_fn=collate_fn, num_workers=0
     )
-    stats, coco_evaluator = evaluate(
+    stats = evaluate(
         model,
         criterion,
         postprocessors,
@@ -359,4 +360,3 @@ def test_evaluate_runs(model_bundle, coco_root, device):
         output_dir="",
     )
     assert "loss" in stats
-    assert coco_evaluator is not None

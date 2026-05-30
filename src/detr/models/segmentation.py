@@ -9,10 +9,12 @@ from collections import defaultdict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import detr.util.box_ops as box_ops
 from PIL import Image
 from torch import Tensor
-from detr.util.misc import NestedTensor, interpolate, nested_tensor_from_tensor_list
+from torchvision.ops.misc import interpolate
+
+import detr.util.box_ops as box_ops
+from detr.util.misc import NestedTensor, nested_tensor_from_tensor_list
 
 try:
     from panopticapi.utils import id2rgb, rgb2id

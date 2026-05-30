@@ -87,7 +87,7 @@ def main(args):
         base_ds=base_ds,
     )
 
-    test_stats, coco_evaluator = evaluate(
+    evaluate(
         bundle.ai_model,
         bundle.criterion,
         bundle.postprocessors,
@@ -96,8 +96,6 @@ def main(args):
         device,
         str(output_dir) if output_dir else "",
     )
-    if output_dir:
-        torch.save(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
 
 
 if __name__ == "__main__":

@@ -1,71 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """
-Train and eval functions used in main.py
+Eval functions used in main.py
 """
-
-import math
-import sys
-from collections.abc import Iterable
 
 import torch
 from tqdm import tqdm
 
 from detr.data.coco_eval import CocoEvaluator
 from detr.util.logger import MetricLogger, SmoothedValue
-
-
-def train_one_epoch(
-    model: torch.nn.Module,
-    criterion: torch.nn.Module,
-    data_loader: Iterable,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-    epoch: int,
-    max_norm: float = 0,
-):
-    model.train()
-    criterion.train()
-    metric_logger = MetricLogger(delimiter="  ")
-    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
-    metric_logger.add_meter(
-        "class_error", SmoothedValue(window_size=1, fmt="{value:.2f}")
-    )
-    header = f"Epoch: [{epoch}]"
-    print_freq = 10
-
-    for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
-        samples = samples.to(device)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
-        outputs = model(samples)
-        loss_dict = criterion(outputs, targets)
-        weight_dict = criterion.weight_dict
-        losses = sum(
-            loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict
-        )
-
-        loss_dict_unscaled = {f"{k}_unscaled": v for k, v in loss_dict.items()}
-        loss_dict_scaled = {
-            k: v * weight_dict[k] for k, v in loss_dict.items() if k in weight_dict
-        }
-        loss_value = sum(loss_dict_scaled.values()).item()
-
-        if not math.isfinite(loss_value):
-            tqdm.write(f"Loss is {loss_value}, stopping training")
-            tqdm.write(str(loss_dict))
-            sys.exit(1)
-
-        optimizer.zero_grad()
-        losses.backward()
-        if max_norm > 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
-        optimizer.step()
-
-        metric_logger.update(loss=loss_value, **loss_dict_scaled, **loss_dict_unscaled)
-        metric_logger.update(class_error=loss_dict["class_error"])
-        metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-    tqdm.write("Averaged stats: " + str(metric_logger))
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
 @torch.no_grad()
@@ -132,4 +74,4 @@ def evaluate(
             stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
         if "segm" in postprocessors.keys():
             stats["coco_eval_masks"] = coco_evaluator.coco_eval["segm"].stats.tolist()
-    return stats, coco_evaluator
+    return stats

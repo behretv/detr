@@ -130,11 +130,3 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
-
-
-def interpolate(
-    input, size=None, scale_factor=None, mode="nearest", align_corners=None
-) -> Tensor:
-    return torchvision.ops.misc.interpolate(
-        input, size, scale_factor, mode, align_corners
-    )
