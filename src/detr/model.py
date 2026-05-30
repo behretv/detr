@@ -49,6 +49,47 @@ class Bundle:
     with_augmentation: bool = False
     logs: list[dict[str, Any]] = field(default_factory=list)
 
+    @classmethod
+    def build(
+        cls,
+        model_params: parameters.Model | None = None,
+        loss_params: parameters.Loss | None = None,
+        train_params: parameters.Train | None = None,
+        run_params: parameters.Run | None = None,
+        name: str = "",
+        source: str = "",
+        transforms: list[v2.Transform] | None = None,
+        cats: dict[int, str] | None = None,
+    ) -> Bundle:
+        """Construct a ``Bundle`` from parameter dataclasses.
+
+        All parameter arguments default to their respective dataclass defaults
+        when omitted.
+        """
+        from detr.models import build  # local import to avoid circular deps
+
+        model_params = model_params or parameters.Model()
+        loss_params = loss_params or parameters.Loss()
+        train_params = train_params or parameters.Train()
+        run_params = run_params or parameters.Run()
+
+        model, criterion, postprocessors = build(
+            model_params, loss_params, train_params, run_params
+        )
+        return cls(
+            ai_model=model,
+            criterion=criterion,
+            postprocessors=postprocessors,
+            model_params=model_params,
+            loss_params=loss_params,
+            train_params=train_params,
+            name=name,
+            source=source,
+            transforms=transforms or [],
+            cats=cats or {},
+            device=run_params.device,
+        )
+
     def __post_init__(self) -> None:
         self.ai_model = self.ai_model.to(self.device)
         self.criterion = self.criterion.to(self.device)
@@ -96,7 +137,7 @@ class Bundle:
             Transforms to attach to the bundle. Defaults to an empty list if
             not provided (they are not stored in the checkpoint).
         """
-        from detr.models import build_model  # local import to avoid circular deps
+        from detr.models import build  # local import to avoid circular deps
 
         file = Path(file).with_suffix(".pth")
         checkpoint = torch.load(file, map_location="cpu", weights_only=False)
@@ -110,7 +151,7 @@ class Bundle:
         loss_params: parameters.Loss = checkpoint["loss_params"]
         train_params: parameters.Train = checkpoint["train_params"]
 
-        model, criterion, postprocessors = build_model(
+        model, criterion, postprocessors = build(
             model_params, loss_params, train_params, run_params
         )
         model.load_state_dict(checkpoint["state_dict"])

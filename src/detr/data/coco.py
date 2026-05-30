@@ -5,6 +5,8 @@ COCO dataset which returns image_id for evaluation.
 Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references/detection/coco_utils.py
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import torch
@@ -21,6 +23,36 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         super(CocoDetection, self).__init__(img_folder, ann_file)
         self._transforms = transforms
         self.prepare = ConvertCocoPolysToMask(return_masks)
+
+    @classmethod
+    def build(
+        cls,
+        image_set: str,
+        data_params: parameters.Data,
+        model_params: parameters.Model,
+    ) -> CocoDetection:
+        root = Path(data_params.coco_path)
+        if not root.exists():
+            raise FileNotFoundError(f"provided COCO path {root} does not exist")
+        PATHS = {
+            "train": (root, root / "train.coco.json"),
+            "val": (root, root / "valid.coco.json"),
+        }
+        img_folder, ann_file = PATHS[image_set]
+        return cls(
+            img_folder,
+            ann_file,
+            transforms=make_coco_transforms(image_set),
+            return_masks=model_params.masks,
+        )
+
+    def coco_api(self):
+        """Return the underlying pycocotools COCO API object for evaluation."""
+        dataset = self
+        for _ in range(10):
+            if isinstance(dataset, torch.utils.data.Subset):
+                dataset = dataset.dataset
+        return dataset.coco
 
     def __getitem__(self, idx):
         img, target = super(CocoDetection, self).__getitem__(idx)
@@ -154,19 +186,4 @@ def make_coco_transforms(image_set):
 
 
 def build(image_set: str, data_params: parameters.Data, model_params: parameters.Model):
-    root = Path(data_params.coco_path)
-    if not root.exists():
-        raise FileNotFoundError(f"provided COCO path {root} does not exist")
-    PATHS = {
-        "train": (root, root / "train.coco.json"),
-        "val": (root, root / "valid.coco.json"),
-    }
-
-    img_folder, ann_file = PATHS[image_set]
-    dataset = CocoDetection(
-        img_folder,
-        ann_file,
-        transforms=make_coco_transforms(image_set),
-        return_masks=model_params.masks,
-    )
-    return dataset
+    return CocoDetection.build(image_set, data_params, model_params)

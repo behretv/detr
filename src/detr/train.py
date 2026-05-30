@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import datetime
+import json
 import time
 from collections.abc import Iterable
 from pathlib import Path
@@ -134,6 +135,8 @@ def run(
             result.export(output_dir / "checkpoint")
             if (epoch + 1) % params.lr_drop == 0 or (epoch + 1) % 100 == 0:
                 result.export(output_dir / f"checkpoint{epoch:04}")
+            with (output_dir / "log.txt").open("a") as f:
+                f.write(json.dumps(log_entry) + "\n")
 
     elapsed = str(datetime.timedelta(seconds=int(time.time() - start_time)))
     print(f"Training time {elapsed}")

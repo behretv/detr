@@ -7,8 +7,7 @@ import torch
 from PIL import Image
 
 import detr.parameters as parameters
-from detr.data import get_coco_api_from_dataset
-from detr.data.coco import CocoDetection, build, make_coco_transforms
+from detr.data.coco import CocoDetection, make_coco_transforms
 from detr.data.transforms import (
     Compose,
     Normalize,
@@ -19,7 +18,7 @@ from detr.data.transforms import (
     ToTensor,
 )
 from detr.engine import evaluate, train_one_epoch
-from detr.models import build_model
+from detr.model import Bundle
 from detr.util.misc import collate_fn
 
 # ---------------------------------------------------------------------------
@@ -114,15 +113,13 @@ def device():
 @pytest.fixture(scope="session")
 def model_bundle(device):
     model_params = _small_model_params()
-    model, criterion, postprocessors = build_model(
-        model_params,
-        parameters.Loss(),
-        parameters.Train(),
-        parameters.Run(device="cpu"),
+    bundle = Bundle.build(
+        model_params=model_params,
+        loss_params=parameters.Loss(),
+        train_params=parameters.Train(),
+        run_params=parameters.Run(device="cpu"),
     )
-    model.to(device)
-    criterion.to(device)
-    return model, criterion, postprocessors
+    return bundle.ai_model, bundle.criterion, bundle.postprocessors
 
 
 @pytest.fixture(scope="session")
@@ -278,13 +275,15 @@ def test_dataset_boxes_normalised(coco_root):
 
 
 def test_build_dataset(coco_root):
-    ds = build("train", parameters.Data(coco_path=str(coco_root)), parameters.Model())
+    ds = CocoDetection.build(
+        "train", parameters.Data(coco_path=str(coco_root)), parameters.Model()
+    )
     assert len(ds) > 0
 
 
 def test_build_dataset_missing_path_raises():
     with pytest.raises(FileNotFoundError):
-        build(
+        CocoDetection.build(
             "train", parameters.Data(coco_path="/nonexistent/path"), parameters.Model()
         )
 
@@ -355,7 +354,7 @@ def test_evaluate_runs(model_bundle, coco_root, device):
         criterion,
         postprocessors,
         loader,
-        get_coco_api_from_dataset(ds),
+        ds.coco_api(),
         device,
         output_dir="",
     )
