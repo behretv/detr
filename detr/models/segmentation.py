@@ -45,7 +45,8 @@ class DETRsegm(nn.Module):
         bs = features[-1].tensors.shape[0]
 
         src, mask = features[-1].decompose()
-        assert mask is not None
+        if mask is None:
+            raise ValueError("mask must not be None in DETRsegm.forward")
         src_proj = self.detr.input_proj(src)
         hs, memory = self.detr.transformer(
             src_proj, mask, self.detr.query_embed.weight, pos[-1]
@@ -252,7 +253,11 @@ class PostProcessSegm(nn.Module):
 
     @torch.no_grad()
     def forward(self, results, outputs, orig_target_sizes, max_target_sizes):
-        assert len(orig_target_sizes) == len(max_target_sizes)
+        if len(orig_target_sizes) != len(max_target_sizes):
+            raise ValueError(
+                f"orig_target_sizes and max_target_sizes must have the same length, "
+                f"got {len(orig_target_sizes)} and {len(max_target_sizes)}"
+            )
         max_h, max_w = max_target_sizes.max(0)[0].tolist()
         outputs_masks = outputs["pred_masks"].squeeze(2)
         outputs_masks = F.interpolate(
@@ -298,13 +303,21 @@ class PostProcessPanoptic(nn.Module):
         """
         if target_sizes is None:
             target_sizes = processed_sizes
-        assert len(processed_sizes) == len(target_sizes)
+        if len(processed_sizes) != len(target_sizes):
+            raise ValueError(
+                f"processed_sizes and target_sizes must have the same length, "
+                f"got {len(processed_sizes)} and {len(target_sizes)}"
+            )
         out_logits, raw_masks, raw_boxes = (
             outputs["pred_logits"],
             outputs["pred_masks"],
             outputs["pred_boxes"],
         )
-        assert len(out_logits) == len(raw_masks) == len(target_sizes)
+        if not (len(out_logits) == len(raw_masks) == len(target_sizes)):
+            raise ValueError(
+                f"out_logits, raw_masks, and target_sizes must have the same length, "
+                f"got {len(out_logits)}, {len(raw_masks)}, and {len(target_sizes)}"
+            )
         preds = []
 
         def to_tuple(tup):
@@ -330,7 +343,11 @@ class PostProcessPanoptic(nn.Module):
             cur_boxes = box_ops.box_cxcywh_to_xyxy(cur_boxes[keep])
 
             h, w = cur_masks.shape[-2:]
-            assert len(cur_boxes) == len(cur_classes)
+            if len(cur_boxes) != len(cur_classes):
+                raise RuntimeError(
+                    f"cur_boxes and cur_classes must have the same length, "
+                    f"got {len(cur_boxes)} and {len(cur_classes)}"
+                )
 
             # It may be that we have several predicted masks for the same stuff class.
             # In the following, we track the list of masks ids for each stuff class (they are merged later on)

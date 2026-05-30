@@ -200,7 +200,10 @@ class RandomHorizontalFlip(object):
 
 class RandomResize(object):
     def __init__(self, sizes, max_size=None):
-        assert isinstance(sizes, (list, tuple))
+        if not isinstance(sizes, (list, tuple)):
+            raise TypeError(
+                f"sizes must be a list or tuple, got {type(sizes).__name__}"
+            )
         self.sizes = sizes
         self.max_size = max_size
 

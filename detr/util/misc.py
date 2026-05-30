@@ -76,7 +76,10 @@ class MetricLogger(object):
         for k, v in kwargs.items():
             if isinstance(v, torch.Tensor):
                 v = v.item()
-            assert isinstance(v, (float, int))
+            if not isinstance(v, (float, int)):
+                raise TypeError(
+                    f"Expected float or int, got {type(v).__name__} for key '{k}'"
+                )
             self.meters[k].update(v)
 
     def __getattr__(self, attr):
@@ -175,7 +178,6 @@ class NestedTensor(object):
         cast_tensor = self.tensors.to(device)
         mask = self.mask
         if mask is not None:
-            assert mask is not None
             cast_mask = mask.to(device)
         else:
             cast_mask = None

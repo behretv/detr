@@ -33,7 +33,8 @@ class PositionEmbeddingSine(nn.Module):
     def forward(self, tensor_list: NestedTensor):
         x = tensor_list.tensors
         mask = tensor_list.mask
-        assert mask is not None
+        if mask is None:
+            raise ValueError("mask must not be None in PositionEmbeddingSine.forward")
         not_mask = ~mask
         y_embed = not_mask.cumsum(1, dtype=torch.float32)
         x_embed = not_mask.cumsum(2, dtype=torch.float32)

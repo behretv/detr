@@ -20,7 +20,10 @@ from pycocotools.cocoeval import COCOeval
 
 class CocoEvaluator(object):
     def __init__(self, coco_gt, iou_types):
-        assert isinstance(iou_types, (list, tuple))
+        if not isinstance(iou_types, (list, tuple)):
+            raise TypeError(
+                f"iou_types must be a list or tuple, got {type(iou_types).__name__}"
+            )
         coco_gt = copy.deepcopy(coco_gt)
         self.coco_gt = coco_gt
 

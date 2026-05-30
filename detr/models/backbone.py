@@ -96,7 +96,8 @@ class BackboneBase(nn.Module):
         out: dict[str, NestedTensor] = {}
         for name, x in xs.items():
             m = tensor_list.mask
-            assert m is not None
+            if m is None:
+                raise ValueError("mask must not be None in BackboneBase.forward")
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
             out[name] = NestedTensor(x, mask)
         return out
@@ -112,9 +113,10 @@ class Backbone(BackboneBase):
         return_interm_layers: bool,
         dilation: bool,
     ):
+        weights = torchvision.models.get_model_weights(name).DEFAULT
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            pretrained=True,
+            weights=weights,
             norm_layer=FrozenBatchNorm2d,
         )
         num_channels = 512 if name in ("resnet18", "resnet34") else 2048

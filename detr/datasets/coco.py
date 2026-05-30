@@ -154,7 +154,8 @@ def make_coco_transforms(image_set):
 
 def build(image_set: str, data_params: DataParameters, model_params: ModelParameters):
     root = Path(data_params.coco_path)
-    assert root.exists(), f"provided COCO path {root} does not exist"
+    if not root.exists():
+        raise FileNotFoundError(f"provided COCO path {root} does not exist")
     PATHS = {
         "train": (root, root / "train.coco.json"),
         "val": (root, root / "valid.coco.json"),

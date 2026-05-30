@@ -48,7 +48,8 @@ def main(args):
     print(f"git:\n  {utils.get_sha()}\n")
 
     if model_params.frozen_weights is not None:
-        assert model_params.masks, "Frozen training is meant for segmentation only"
+        if not model_params.masks:
+            raise ValueError("Frozen training is meant for segmentation only")
     print(train_params, model_params, loss_params, data_params, run_params)
 
     device = torch.device(run_params.device)
