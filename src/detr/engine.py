@@ -8,9 +8,10 @@ import sys
 from collections.abc import Iterable
 
 import torch
-import detr.util.misc as utils
-from detr.data.coco_eval import CocoEvaluator
 from tqdm import tqdm
+
+from detr.data.coco_eval import CocoEvaluator
+from detr.util.logger import MetricLogger, SmoothedValue
 
 
 def train_one_epoch(
@@ -24,10 +25,10 @@ def train_one_epoch(
 ):
     model.train()
     criterion.train()
-    metric_logger = utils.MetricLogger(delimiter="  ")
-    metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
+    metric_logger = MetricLogger(delimiter="  ")
+    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
     metric_logger.add_meter(
-        "class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}")
+        "class_error", SmoothedValue(window_size=1, fmt="{value:.2f}")
     )
     header = f"Epoch: [{epoch}]"
     print_freq = 10
@@ -74,9 +75,9 @@ def evaluate(
     model.eval()
     criterion.eval()
 
-    metric_logger = utils.MetricLogger(delimiter="  ")
+    metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter(
-        "class_error", utils.SmoothedValue(window_size=1, fmt="{value:.2f}")
+        "class_error", SmoothedValue(window_size=1, fmt="{value:.2f}")
     )
     header = "Test:"
 
