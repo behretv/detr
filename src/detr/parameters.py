@@ -14,6 +14,7 @@ def add_args(parser: argparse.ArgumentParser, cls: type) -> None:
         ftype = hints[f.name]
 
         help_text = f.metadata.get("help", None)
+        required = f.metadata.get("required", False)
 
         origin = get_origin(ftype)
         if origin is Union or origin is _types.UnionType:
@@ -34,7 +35,13 @@ def add_args(parser: argparse.ArgumentParser, cls: type) -> None:
                     help=help_text,
                 )
         else:
-            parser.add_argument(arg_name, type=ftype, default=f.default, help=help_text)
+            parser.add_argument(
+                arg_name,
+                type=ftype,
+                default=f.default,
+                help=help_text,
+                required=required,
+            )
 
 
 @dataclass
@@ -198,10 +205,13 @@ class Run:
     device: str = field(
         default="cuda", metadata={"help": "Device to run on (cuda or cpu)"}
     )
-    resume: str = field(
-        default="", metadata={"help": "Path to checkpoint to resume from"}
+    base_model: str = field(
+        default="",
+        metadata={
+            "help": "Path to the base model checkpoint to load (required)",
+            "required": True,
+        },
     )
-    start_epoch: int = field(default=0, metadata={"help": "Starting epoch number"})
     eval: bool = field(
         default=False, metadata={"help": "Whether to run in evaluation mode only"}
     )

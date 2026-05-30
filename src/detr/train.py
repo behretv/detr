@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import dataclasses
 import datetime
 import json
 import time
@@ -12,32 +11,15 @@ import torch
 
 from detr.engine import evaluate, train_one_epoch
 from detr.model import Bundle
-
-
-@dataclasses.dataclass
-class Parameters:
-    """Hyperparameters for a :func:`run` call.
-
-    Mirrors ``parameters.Train`` but is intentionally kept separate so that
-    callers can tweak training behaviour without touching the bundle's stored
-    ``train_params``.
-    """
-
-    epochs: int = 2
-    lr: float = 1e-4
-    lr_backbone: float = 1e-5
-    weight_decay: float = 1e-4
-    lr_drop: int = 40
-    clip_max_norm: float = 0.1
-    start_epoch: int = 0
-    output_dir: Path | None = None
+from detr.parameters import Train
 
 
 def run(
     bundle: Bundle,
     train_loader: Iterable,
     val_loader: Iterable,
-    params: Parameters | None = None,
+    params: Train | None = None,
+    output_dir: Path | str | None = None,
     base_ds=None,
 ) -> Bundle:
     """Train *bundle* for the given number of epochs and return an updated bundle.
@@ -55,8 +37,11 @@ def run(
     val_loader:
         DataLoader yielding ``(NestedTensor, targets)`` batches for validation.
     params:
-        Training hyperparameters.  Defaults to ``Parameters()`` (sensible
+        Training hyperparameters.  Defaults to ``Train()`` (sensible
         defaults for fine-tuning).
+    output_dir:
+        Directory where checkpoints and logs are written.  Pass ``None`` to
+        disable persistence.
     base_ds:
         COCO API object for the validation set, used by the evaluator.
         Pass ``None`` to skip COCO evaluation (loss stats are still logged).
@@ -67,9 +52,9 @@ def run(
         A new ``Bundle`` with updated weights and ``logs`` appended.
     """
     if params is None:
-        params = Parameters()
+        params = Train()
 
-    output_dir = Path(params.output_dir) if params.output_dir else None
+    output_dir = Path(output_dir) if output_dir else None
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -102,7 +87,7 @@ def run(
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, params.lr_drop)
 
     start_time = time.time()
-    for epoch in range(params.start_epoch, params.epochs):
+    for epoch in range(params.epochs):
         train_stats = train_one_epoch(
             result.ai_model,
             result.criterion,

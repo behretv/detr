@@ -42,16 +42,7 @@ def main(args):
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    if run_params.resume:
-        bundle = Bundle.load_from_file(run_params.resume, device=run_params.device)
-    else:
-        bundle = Bundle.build(
-            model_params=model_params,
-            loss_params=loss_params,
-            train_params=train_params,
-            run_params=run_params,
-            name=data_params.dataset_file,
-        )
+    bundle = Bundle.load_from_file(run_params.base_model, device=run_params.device)
 
     n_parameters = sum(
         p.numel() for p in bundle.ai_model.parameters() if p.requires_grad
@@ -86,22 +77,13 @@ def main(args):
     base_ds = dataset_val.coco_api()
 
     output_dir = Path(run_params.output_dir) if run_params.output_dir else None
-    start_epoch = len(bundle.logs)
 
     bundle = train.run(
         bundle,
         data_loader_train,
         data_loader_val,
-        params=train.Parameters(
-            epochs=train_params.epochs,
-            lr=train_params.lr,
-            lr_backbone=train_params.lr_backbone,
-            weight_decay=train_params.weight_decay,
-            lr_drop=train_params.lr_drop,
-            clip_max_norm=train_params.clip_max_norm,
-            start_epoch=start_epoch,
-            output_dir=output_dir,
-        ),
+        params=train_params,
+        output_dir=output_dir,
         base_ds=base_ds,
     )
 
