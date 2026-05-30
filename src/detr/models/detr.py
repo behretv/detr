@@ -5,9 +5,10 @@ DETR model and criterion classes.
 
 import torch
 import torch.nn.functional as F
-from detr.params import LossParameters, ModelParameters, RunParameters, TrainParameters
 from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
+
+import detr.parameters as parameters
 from detr.util import box_ops
 from detr.util.misc import (
     NestedTensor,
@@ -350,10 +351,10 @@ class MLP(nn.Module):
 
 
 def build(
-    model_params: ModelParameters,
-    loss_params: LossParameters,
-    train_params: TrainParameters,
-    run_params: RunParameters,
+    model_params: parameters.Model,
+    loss_params: parameters.Loss,
+    train_params: parameters.Train,
+    run_params: parameters.Run,
 ):
     # the `num_classes` naming here is somewhat misleading.
     # it indeed corresponds to `max_obj_id + 1`, where max_obj_id

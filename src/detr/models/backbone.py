@@ -6,9 +6,10 @@ Backbone modules.
 import torch
 import torch.nn.functional as F
 import torchvision
-from detr.params import ModelParameters, TrainParameters
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
+
+import detr.parameters as parameters
 from detr.util.misc import NestedTensor
 
 from .position_encoding import build_position_encoding
@@ -139,7 +140,7 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(model_params: ModelParameters, train_params: TrainParameters):
+def build_backbone(model_params: parameters.Model, train_params: parameters.Train):
     position_embedding = build_position_encoding(model_params)
     train_backbone = train_params.lr_backbone > 0
     return_interm_layers = model_params.masks

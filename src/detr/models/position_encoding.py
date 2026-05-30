@@ -6,8 +6,9 @@ Various positional encodings for the transformer.
 import math
 
 import torch
-from detr.params import ModelParameters
 from torch import nn
+
+import detr.parameters as parameters
 from detr.util.misc import NestedTensor
 
 
@@ -95,7 +96,7 @@ class PositionEmbeddingLearned(nn.Module):
         return pos
 
 
-def build_position_encoding(params: ModelParameters):
+def build_position_encoding(params: parameters.Model):
     N_steps = params.hidden_dim // 2
     if params.position_embedding in ("v2", "sine"):
         # TODO find a better way of exposing other arguments

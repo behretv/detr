@@ -6,6 +6,7 @@ import pytest
 import torch
 from PIL import Image
 
+import detr.parameters as parameters
 from detr.data import get_coco_api_from_dataset
 from detr.data.coco import CocoDetection, build, make_coco_transforms
 from detr.data.transforms import (
@@ -19,13 +20,6 @@ from detr.data.transforms import (
 )
 from detr.engine import evaluate, train_one_epoch
 from detr.models import build_model
-from detr.params import (
-    DataParameters,
-    LossParameters,
-    ModelParameters,
-    RunParameters,
-    TrainParameters,
-)
 from detr.util.misc import collate_fn
 
 # ---------------------------------------------------------------------------
@@ -85,8 +79,8 @@ def _make_pil(h: int = 100, w: int = 100) -> Image.Image:
     return Image.fromarray(np.random.randint(0, 255, (h, w, 3), dtype=np.uint8))
 
 
-def _small_model_params() -> ModelParameters:
-    return ModelParameters(
+def _small_model_params() -> parameters.Model:
+    return parameters.Model(
         backbone="resnet50",
         enc_layers=1,
         dec_layers=1,
@@ -122,9 +116,9 @@ def model_bundle(device):
     model_params = _small_model_params()
     model, criterion, postprocessors = build_model(
         model_params,
-        LossParameters(),
-        TrainParameters(),
-        RunParameters(device="cpu"),
+        parameters.Loss(),
+        parameters.Train(),
+        parameters.Run(device="cpu"),
     )
     model.to(device)
     criterion.to(device)
@@ -284,13 +278,15 @@ def test_dataset_boxes_normalised(coco_root):
 
 
 def test_build_dataset(coco_root):
-    ds = build("train", DataParameters(coco_path=str(coco_root)), ModelParameters())
+    ds = build("train", parameters.Data(coco_path=str(coco_root)), parameters.Model())
     assert len(ds) > 0
 
 
 def test_build_dataset_missing_path_raises():
     with pytest.raises(FileNotFoundError):
-        build("train", DataParameters(coco_path="/nonexistent/path"), ModelParameters())
+        build(
+            "train", parameters.Data(coco_path="/nonexistent/path"), parameters.Model()
+        )
 
 
 def test_dataloader_batch(train_loader):

@@ -1,17 +1,4 @@
-from .params import (
-    DataParameters,
-    LossParameters,
-    ModelParameters,
-    RunParameters,
-    TrainParameters,
-    _add_dataclass_args,
-)
+from detr import parameters
+from detr.model import Bundle
 
-__all__ = [
-    "DataParameters",
-    "LossParameters",
-    "ModelParameters",
-    "RunParameters",
-    "TrainParameters",
-    "_add_dataclass_args",
-]
+__all__ = ["parameters", "Bundle"]

@@ -2,7 +2,7 @@
 import torch.utils.data
 import torchvision
 
-from detr.params import DataParameters, ModelParameters
+import detr.parameters as parameters
 
 from .coco import build as build_coco
 
@@ -16,6 +16,6 @@ def get_coco_api_from_dataset(dataset):
 
 
 def build_dataset(
-    image_set: str, data_params: DataParameters, model_params: ModelParameters
+    image_set: str, data_params: parameters.Data, model_params: parameters.Model
 ):
     return build_coco(image_set, data_params, model_params)

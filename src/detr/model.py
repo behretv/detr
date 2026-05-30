@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import torch
+import torch.nn as nn
+import torchvision.transforms.v2 as v2
+
+import detr.parameters as parameters
+
+
+@dataclass
+class Bundle:
+    """Wraps a trained DETR model together with its metadata and training logs.
+
+    Fields
+    ------
+    ai_model      : the ``nn.Module`` (moved to *device* in ``__post_init__``).
+    criterion     : ``SetCriterion`` used during training / evaluation.
+    postprocessors: dict mapping output type (``"bbox"``, ``"segm"``) to postprocessor modules.
+    model_params  : ``parameters.Model`` that describes the architecture.
+    loss_params   : ``parameters.Loss`` used to build the criterion.
+    train_params  : ``parameters.Train`` used during training.
+    name          : human-readable name for this run / experiment.
+    source        : origin of the weights (e.g. a file path or URL).
+    transforms    : inference / validation transforms applied to inputs.
+    cats          : mapping from COCO category id → category name.
+    device        : ``"cuda"`` when a GPU is available, otherwise ``"cpu"``.
+    with_augmentation : whether training-time augmentation is enabled.
+    logs          : list of per-epoch stat dicts appended during training.
+    """
+
+    ai_model: nn.Module
+    criterion: nn.Module
+    postprocessors: dict[str, nn.Module]
+    model_params: parameters.Model
+    loss_params: parameters.Loss
+    train_params: parameters.Train
+    name: str
+    source: str
+    transforms: list[v2.Transform]
+    cats: dict[int, str]
+    device: str = field(
+        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu"
+    )
+    with_augmentation: bool = False
+    logs: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.ai_model = self.ai_model.to(self.device)
+        self.criterion = self.criterion.to(self.device)
+
+    def export(self, file: Path | str) -> None:
+        """Save weights + architecture params to *file*.pth and logs to *file*.csv.
+
+        Enough information is stored to fully reconstruct the bundle via
+        ``Bundle.load_from_file()``.
+        """
+        torch.save(
+            {
+                "state_dict": self.ai_model.state_dict(),
+                "model_params": self.model_params,
+                "loss_params": self.loss_params,
+                "train_params": self.train_params,
+                "name": self.name,
+                "source": self.source,
+                "cats": self.cats,
+                "device": self.device,
+                "with_augmentation": self.with_augmentation,
+            },
+            Path(file).with_suffix(".pth"),
+        )
+
+        pd.DataFrame(self.logs).to_csv(Path(file).with_suffix(".csv"), index=False)
+
+    @classmethod
+    def load_from_file(
+        cls,
+        file: Path | str,
+        device: str | None = None,
+        transforms: list[v2.Transform] | None = None,
+    ) -> Bundle:
+        """Reconstruct a ``Bundle`` from a ``.pth`` file written by ``export()``.
+
+        Parameters
+        ----------
+        file:
+            Path to the ``.pth`` file (the ``.pth`` suffix may be omitted).
+        device:
+            Override the device stored in the checkpoint. Defaults to the
+            value recorded at export time, or auto-detects CUDA when absent.
+        transforms:
+            Transforms to attach to the bundle. Defaults to an empty list if
+            not provided (they are not stored in the checkpoint).
+        """
+        from detr.models import build_model  # local import to avoid circular deps
+
+        file = Path(file).with_suffix(".pth")
+        checkpoint = torch.load(file, map_location="cpu", weights_only=False)
+
+        resolved_device = device or checkpoint.get(
+            "device", "cuda" if torch.cuda.is_available() else "cpu"
+        )
+        run_params = parameters.Run(device=resolved_device)
+
+        model_params: parameters.Model = checkpoint["model_params"]
+        loss_params: parameters.Loss = checkpoint["loss_params"]
+        train_params: parameters.Train = checkpoint["train_params"]
+
+        model, criterion, postprocessors = build_model(
+            model_params, loss_params, train_params, run_params
+        )
+        model.load_state_dict(checkpoint["state_dict"])
+
+        return cls(
+            ai_model=model,
+            criterion=criterion,
+            postprocessors=postprocessors,
+            model_params=model_params,
+            loss_params=loss_params,
+            train_params=train_params,
+            name=checkpoint.get("name", ""),
+            source=str(file),
+            transforms=transforms or [],
+            cats=checkpoint.get("cats", {}),
+            device=resolved_device,
+            with_augmentation=checkpoint.get("with_augmentation", False),
+        )

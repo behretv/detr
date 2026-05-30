@@ -12,8 +12,9 @@ import copy
 
 import torch
 import torch.nn.functional as F
-from detr.params import ModelParameters
 from torch import Tensor, nn
+
+import detr.parameters as parameters
 
 
 class Transformer(nn.Module):
@@ -366,7 +367,7 @@ def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_transformer(params: ModelParameters):
+def build_transformer(params: parameters.Model):
     return Transformer(
         d_model=params.hidden_dim,
         dropout=params.dropout,

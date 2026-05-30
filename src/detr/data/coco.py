@@ -7,12 +7,13 @@ Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references
 
 from pathlib import Path
 
-import detr.data.transforms as T
 import torch
 import torch.utils.data
 import torchvision
-from detr.params import DataParameters, ModelParameters
 from pycocotools import mask as coco_mask
+
+import detr.data.transforms as T
+import detr.parameters as parameters
 
 
 class CocoDetection(torchvision.datasets.CocoDetection):
@@ -152,7 +153,7 @@ def make_coco_transforms(image_set):
     raise ValueError(f"unknown {image_set}")
 
 
-def build(image_set: str, data_params: DataParameters, model_params: ModelParameters):
+def build(image_set: str, data_params: parameters.Data, model_params: parameters.Model):
     root = Path(data_params.coco_path)
     if not root.exists():
         raise FileNotFoundError(f"provided COCO path {root} does not exist")
