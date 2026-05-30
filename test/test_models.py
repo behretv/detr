@@ -10,8 +10,11 @@ from detr.models.position_encoding import (
     PositionEmbeddingSine,
 )
 from detr.models.transformer import Transformer
-from detr.util import box_ops
-from detr.util.misc import nested_tensor_from_tensor_list
+from detr.misc import (
+    box_cxcywh_to_xyxy,
+    box_xyxy_to_cxcywh,
+    nested_tensor_from_tensor_list,
+)
 
 
 def detr_resnet50(pretrained=False):
@@ -37,7 +40,7 @@ def _indices_torch2python(indices):
 
 def test_box_cxcywh_to_xyxy():
     t = torch.rand(10, 4)
-    r = box_ops.box_xyxy_to_cxcywh(box_ops.box_cxcywh_to_xyxy(t))
+    r = box_xyxy_to_cxcywh(box_cxcywh_to_xyxy(t))
     assert (t - r).abs().max() < 1e-5
 
 

@@ -9,9 +9,9 @@ from torch.utils.data import DataLoader
 
 import detr.parameters as parameters
 import detr.train as train
-import detr.util.misc as utils
-from detr.data import CocoDetection
-from detr.engine import evaluate
+import detr.misc as utils
+from detr.dataset import CocoDetection
+from detr.evaluate import evaluate
 from detr.model import Bundle
 
 

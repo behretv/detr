@@ -7,8 +7,12 @@ import torch
 from PIL import Image
 
 import detr.parameters as parameters
-from detr.data.coco import CocoDetection, make_coco_transforms
-from detr.data.transforms import (
+from detr.dataset import CocoDetection
+from detr.evaluate import evaluate
+from detr.misc import collate_fn
+from detr.model import Bundle
+from detr.train import train_one_epoch
+from detr.transforms import (
     Compose,
     Normalize,
     RandomHorizontalFlip,
@@ -16,11 +20,8 @@ from detr.data.transforms import (
     RandomSelect,
     RandomSizeCrop,
     ToTensor,
+    make_coco_transforms,
 )
-from detr.engine import evaluate
-from detr.model import Bundle
-from detr.train import train_one_epoch
-from detr.util.misc import collate_fn
 
 # ---------------------------------------------------------------------------
 # Helpers

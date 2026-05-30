@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from detr.util.misc import nested_tensor_from_tensor_list
+from detr.misc import nested_tensor_from_tensor_list
 
 try:
     import onnxruntime

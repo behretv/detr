@@ -1,13 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""
-Eval functions used in main.py
-"""
+"""Evaluation entry point for DETR models."""
 
 import torch
 from tqdm import tqdm
 
-from detr.data.coco_eval import CocoEvaluator
-from detr.util.logger import MetricLogger, SmoothedValue
+from detr.coco_eval import CocoEvaluator
+from detr.logger import MetricLogger, SmoothedValue
 
 
 @torch.no_grad()

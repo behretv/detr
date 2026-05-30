@@ -13,8 +13,11 @@ from PIL import Image
 from torch import Tensor
 from torchvision.ops.misc import interpolate
 
-import detr.util.box_ops as box_ops
-from detr.util.misc import NestedTensor, nested_tensor_from_tensor_list
+from detr.misc import (
+    NestedTensor,
+    box_cxcywh_to_xyxy,
+    nested_tensor_from_tensor_list,
+)
 
 try:
     from panopticapi.utils import id2rgb, rgb2id
@@ -342,7 +345,7 @@ class PostProcessPanoptic(nn.Module):
             cur_masks = interpolate(
                 cur_masks[:, None], to_tuple(size), mode="bilinear"
             ).squeeze(1)
-            cur_boxes = box_ops.box_cxcywh_to_xyxy(cur_boxes[keep])
+            cur_boxes = box_cxcywh_to_xyxy(cur_boxes[keep])
 
             h, w = cur_masks.shape[-2:]
             if len(cur_boxes) != len(cur_classes):

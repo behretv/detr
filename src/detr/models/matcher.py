@@ -9,7 +9,7 @@ from torch import nn
 from torchvision.ops.boxes import generalized_box_iou
 
 import detr.parameters as parameters
-from detr.util.box_ops import box_cxcywh_to_xyxy
+from detr.misc import box_cxcywh_to_xyxy
 
 
 class HungarianMatcher(nn.Module):

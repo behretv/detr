@@ -12,10 +12,10 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
-from detr.engine import evaluate
+from detr.evaluate import evaluate
 from detr.model import Bundle
 from detr.parameters import Train
-from detr.util.logger import MetricLogger, SmoothedValue
+from detr.logger import MetricLogger, SmoothedValue
 
 
 def train_one_epoch(
