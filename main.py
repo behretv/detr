@@ -1,20 +1,18 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import argparse
-import datetime
 import json
 import random
-import time
 from pathlib import Path
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 import detr.parameters as parameters
+import detr.train as train
 import detr.util.misc as utils
 from detr.data import build_dataset, get_coco_api_from_dataset
-from detr.engine import evaluate, train_one_epoch
+from detr.engine import evaluate
 from detr.model import Bundle
 from detr.models import build_model
 
@@ -67,28 +65,6 @@ def main(args):
     )
     print("number of params:", n_parameters)
 
-    param_dicts = [
-        {
-            "params": [
-                p
-                for n, p in bundle.ai_model.named_parameters()
-                if "backbone" not in n and p.requires_grad
-            ]
-        },
-        {
-            "params": [
-                p
-                for n, p in bundle.ai_model.named_parameters()
-                if "backbone" in n and p.requires_grad
-            ],
-            "lr": train_params.lr_backbone,
-        },
-    ]
-    optimizer = torch.optim.AdamW(
-        param_dicts, lr=train_params.lr, weight_decay=train_params.weight_decay
-    )
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, train_params.lr_drop)
-
     dataset_train = build_dataset(
         image_set="train", data_params=data_params, model_params=model_params
     )
@@ -126,7 +102,7 @@ def main(args):
         )
         bundle.ai_model.detr.load_state_dict(checkpoint["model"])
 
-    output_dir = Path(run_params.output_dir)
+    output_dir = Path(run_params.output_dir) if run_params.output_dir else None
     if run_params.resume:
         if run_params.resume.startswith("https"):
             raw = torch.hub.load_state_dict_from_url(
@@ -134,17 +110,10 @@ def main(args):
             )
         else:
             raw = torch.load(run_params.resume, map_location="cpu", weights_only=False)
-        # Support both ModelBundle exports (key: "state_dict") and raw checkpoints (key: "model")
+        # Support both Bundle exports (key: "state_dict") and raw checkpoints (key: "model")
         state_dict = raw.get("state_dict", raw.get("model"))
         bundle.ai_model.load_state_dict(state_dict)
-        if (
-            not run_params.eval
-            and "optimizer" in raw
-            and "lr_scheduler" in raw
-            and "epoch" in raw
-        ):
-            optimizer.load_state_dict(raw["optimizer"])
-            lr_scheduler.load_state_dict(raw["lr_scheduler"])
+        if not run_params.eval and "epoch" in raw:
             run_params.start_epoch = raw["epoch"] + 1
 
     if run_params.eval:
@@ -155,86 +124,33 @@ def main(args):
             data_loader_val,
             base_ds,
             device,
-            run_params.output_dir,
+            str(output_dir) if output_dir else "",
         )
-        if run_params.output_dir:
+        if output_dir:
             torch.save(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         return
 
-    tqdm.write("Start training")
-    start_time = time.time()
-    epoch_bar = tqdm(
-        range(run_params.start_epoch, train_params.epochs),
-        desc="Epochs",
-        dynamic_ncols=True,
+    bundle = train.run(
+        bundle,
+        data_loader_train,
+        data_loader_val,
+        params=train.Parameters(
+            epochs=train_params.epochs,
+            lr=train_params.lr,
+            lr_backbone=train_params.lr_backbone,
+            weight_decay=train_params.weight_decay,
+            lr_drop=train_params.lr_drop,
+            clip_max_norm=train_params.clip_max_norm,
+            start_epoch=run_params.start_epoch,
+            output_dir=output_dir,
+        ),
+        base_ds=base_ds,
     )
-    for epoch in epoch_bar:
-        train_stats = train_one_epoch(
-            bundle.ai_model,
-            bundle.criterion,
-            data_loader_train,
-            optimizer,
-            device,
-            epoch,
-            train_params.clip_max_norm,
-        )
-        lr_scheduler.step()
-        bundle.logs.append(
-            {"epoch": epoch, **{f"train_{k}": v for k, v in train_stats.items()}}
-        )
-        if run_params.output_dir:
-            # Save a ModelBundle checkpoint (loadable via ModelBundle.load_from_file)
-            bundle.export(output_dir / "checkpoint")
-            # Extra checkpoint before LR drop and every 100 epochs
-            if (epoch + 1) % train_params.lr_drop == 0 or (epoch + 1) % 100 == 0:
-                bundle.export(output_dir / f"checkpoint{epoch:04}")
-            # Also persist optimizer state separately for full resume support
-            torch.save(
-                {
-                    "optimizer": optimizer.state_dict(),
-                    "lr_scheduler": lr_scheduler.state_dict(),
-                    "epoch": epoch,
-                },
-                output_dir / "optimizer.pth",
-            )
 
-        test_stats, coco_evaluator = evaluate(
-            bundle.ai_model,
-            bundle.criterion,
-            bundle.postprocessors,
-            data_loader_val,
-            base_ds,
-            device,
-            run_params.output_dir,
-        )
-
-        log_stats = {
-            "epoch": epoch,
-            "n_parameters": n_parameters,
-            **{f"train_{k}": v for k, v in train_stats.items()},
-            **{f"test_{k}": v for k, v in test_stats.items()},
-        }
-
-        if run_params.output_dir:
-            with (output_dir / "log.txt").open("a") as f:
-                f.write(json.dumps(log_stats) + "\n")
-
-            # for evaluation logs
-            if coco_evaluator is not None:
-                (output_dir / "eval").mkdir(exist_ok=True)
-                if "bbox" in coco_evaluator.coco_eval:
-                    filenames = ["latest.pth"]
-                    if epoch % 50 == 0:
-                        filenames.append(f"{epoch:03}.pth")
-                    for name in filenames:
-                        torch.save(
-                            coco_evaluator.coco_eval["bbox"].eval,
-                            output_dir / "eval" / name,
-                        )
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    tqdm.write(f"Training time {total_time_str}")
+    if output_dir:
+        with (output_dir / "log.txt").open("w") as f:
+            for entry in bundle.logs:
+                f.write(json.dumps({**entry, "n_parameters": n_parameters}) + "\n")
 
 
 if __name__ == "__main__":
