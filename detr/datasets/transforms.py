@@ -5,7 +5,6 @@ Transforms and data augmentation for both image + bbox.
 
 import random
 
-import PIL
 import torch
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
@@ -140,52 +139,16 @@ def resize(image, target, size, max_size=None):
     return rescaled_image, target
 
 
-def pad(image, target, padding):
-    # assumes that we only pad on the bottom right corners
-    padded_image = F.pad(image, (0, 0, padding[0], padding[1]))
-    if target is None:
-        return padded_image, None
-    target = target.copy()
-    # should we do something wrt the original size?
-    target["size"] = torch.tensor(padded_image.size[::-1])
-    if "masks" in target:
-        target["masks"] = torch.nn.functional.pad(
-            target["masks"], (0, padding[0], 0, padding[1])
-        )
-    return padded_image, target
-
-
-class RandomCrop(object):
-    def __init__(self, size):
-        self.size = size
-
-    def __call__(self, img, target):
-        region = T.RandomCrop.get_params(img, self.size)
-        return crop(img, target, region)
-
-
 class RandomSizeCrop(object):
     def __init__(self, min_size: int, max_size: int):
         self.min_size = min_size
         self.max_size = max_size
 
-    def __call__(self, img: PIL.Image.Image, target: dict):
+    def __call__(self, img, target: dict):
         w = random.randint(self.min_size, min(img.width, self.max_size))
         h = random.randint(self.min_size, min(img.height, self.max_size))
         region = T.RandomCrop.get_params(img, [h, w])
         return crop(img, target, region)
-
-
-class CenterCrop(object):
-    def __init__(self, size):
-        self.size = size
-
-    def __call__(self, img, target):
-        image_width, image_height = img.size
-        crop_height, crop_width = self.size
-        crop_top = int(round((image_height - crop_height) / 2.0))
-        crop_left = int(round((image_width - crop_width) / 2.0))
-        return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
 
 
 class RandomHorizontalFlip(object):
@@ -212,16 +175,6 @@ class RandomResize(object):
         return resize(img, target, size, self.max_size)
 
 
-class RandomPad(object):
-    def __init__(self, max_pad):
-        self.max_pad = max_pad
-
-    def __call__(self, img, target):
-        pad_x = random.randint(0, self.max_pad)
-        pad_y = random.randint(0, self.max_pad)
-        return pad(img, target, (pad_x, pad_y))
-
-
 class RandomSelect(object):
     """
     Randomly selects between transforms1 and transforms2,
@@ -242,14 +195,6 @@ class RandomSelect(object):
 class ToTensor(object):
     def __call__(self, img, target):
         return F.to_tensor(img), target
-
-
-class RandomErasing(object):
-    def __init__(self, *args, **kwargs):
-        self.eraser = T.RandomErasing(*args, **kwargs)
-
-    def __call__(self, img, target):
-        return self.eraser(img), target
 
 
 class Normalize(object):
