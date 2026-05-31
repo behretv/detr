@@ -1,11 +1,10 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""
-Transforms and data augmentation for both image + bbox.
+"""DETR transforms / augmentation.
 
-Built on top of :mod:`torchvision.transforms.v2`, which natively syncs
-bounding boxes and masks with image-level geometric transforms.  The public
-classes preserve the legacy ``(image, target_dict) -> (image, target_dict)``
-calling convention used throughout the project.
+Thin orchestration over ``torchvision.transforms.v2``; the only DETR-specific
+step is :class:`FinalizeTargets`, which drops degenerate boxes, refreshes
+``target['size']`` / ``target['area']`` from the post-augmentation state and
+converts boxes to normalised cxcywh in ``[0, 1]``.
 """
 
 from __future__ import annotations
@@ -15,282 +14,121 @@ from typing import Sequence
 
 import torch
 import torchvision.transforms.v2 as v2
-import torchvision.transforms.v2.functional as F
-from PIL import Image
 from torchvision import tv_tensors
-
 from torchvision.ops import box_convert
 
 from detr.parameters import Augmentation
 
 
-# ---------------------------------------------------------------------------
-# tv_tensor helpers
-# ---------------------------------------------------------------------------
+class RandomResize(v2.Transform):
+    """Resize the inputs to a random short side picked uniformly from *sizes*.
 
+    Delegates to :class:`v2.Resize`, whose ``size=int`` + ``max_size`` knobs
+    implement aspect-preserving short-side scaling natively.
+    """
 
-def _canvas_size(image) -> tuple[int, int]:
-    """Return (H, W) for a PIL image or CHW tensor."""
-    if isinstance(image, Image.Image):
-        w, h = image.size
-        return h, w
-    return int(image.shape[-2]), int(image.shape[-1])
-
-
-def _wrap_target(target: dict, canvas_size: tuple[int, int]) -> dict:
-    """Wrap ``boxes`` / ``masks`` as v2 tv_tensors (no-op if already wrapped)."""
-    target = dict(target)
-    boxes = target.get("boxes")
-    if boxes is not None and not isinstance(boxes, tv_tensors.BoundingBoxes):
-        target["boxes"] = tv_tensors.BoundingBoxes(
-            boxes, format=tv_tensors.BoundingBoxFormat.XYXY, canvas_size=canvas_size
-        )
-    masks = target.get("masks")
-    if masks is not None and not isinstance(masks, tv_tensors.Mask):
-        target["masks"] = tv_tensors.Mask(masks)
-    return target
-
-
-def _filter_instances(target: dict, keep: torch.Tensor) -> None:
-    """Drop instances for which *keep* is False across all per-instance fields."""
-    n = keep.shape[0]
-    for field in ("boxes", "labels", "area", "iscrowd", "masks", "keypoints"):
-        val = target.get(field)
-        if torch.is_tensor(val) and val.shape and val.shape[0] == n:
-            target[field] = val[keep]
-
-
-# ---------------------------------------------------------------------------
-# Geometric transforms
-# ---------------------------------------------------------------------------
-
-
-class RandomHorizontalFlip:
-    def __init__(self, p: float = 0.5):
-        self.p = p
-
-    def __call__(self, image, target):
-        if random.random() >= self.p:
-            return image, target
-        target = _wrap_target(target, _canvas_size(image))
-        image = F.horizontal_flip(image)
-        target["boxes"] = F.horizontal_flip(target["boxes"])
-        if "masks" in target:
-            target["masks"] = F.horizontal_flip(target["masks"])
-        return image, target
-
-
-def _get_resized_size(
-    canvas_size: tuple[int, int], size: int, max_size: int | None
-) -> tuple[int, int]:
-    """Aspect-preserving short-side resize, optionally capped by *max_size*."""
-    h, w = canvas_size
-    if max_size is not None:
-        min_orig = float(min(h, w))
-        max_orig = float(max(h, w))
-        if max_orig / min_orig * size > max_size:
-            size = int(round(max_size * min_orig / max_orig))
-
-    if (w <= h and w == size) or (h <= w and h == size):
-        return h, w
-    if w < h:
-        return int(size * h / w), size
-    return size, int(size * w / h)
-
-
-class RandomResize:
     def __init__(self, sizes: Sequence[int], max_size: int | None = None):
-        if not isinstance(sizes, (list, tuple)):
-            raise TypeError(
-                f"sizes must be a list or tuple, got {type(sizes).__name__}"
-            )
-        self.sizes = sizes
+        super().__init__()
+        self.sizes = list(sizes)
         self.max_size = max_size
 
-    def __call__(self, image, target=None):
+    def forward(self, *inputs):
         size = random.choice(self.sizes)
-        h0, w0 = _canvas_size(image)
-        new_h, new_w = _get_resized_size((h0, w0), size, self.max_size)
-        image = F.resize(image, [new_h, new_w])
-
-        if target is None:
-            return image, None
-
-        target = _wrap_target(target, (h0, w0))
-        target["boxes"] = F.resize(target["boxes"], [new_h, new_w])
-        if "masks" in target:
-            target["masks"] = F.resize(
-                target["masks"], [new_h, new_w], interpolation=F.InterpolationMode.NEAREST
-            )
-        if "area" in target:
-            target["area"] = target["area"] * (new_h / h0) * (new_w / w0)
-        target["size"] = torch.tensor([new_h, new_w])
-        return image, target
+        return v2.Resize(size, max_size=self.max_size, antialias=True)(*inputs)
 
 
-class RandomSizeCrop:
+class RandomSizeCrop(v2.Transform):
+    """Crop a random box with height / width uniformly drawn from
+    ``[min_size, max_size]`` (capped by the input dimensions)."""
+
     def __init__(self, min_size: int, max_size: int):
+        super().__init__()
         self.min_size = min_size
         self.max_size = max_size
 
-    def __call__(self, image, target):
-        h0, w0 = _canvas_size(image)
-        w = random.randint(self.min_size, min(w0, self.max_size))
+    def forward(self, *inputs):
+        h0, w0 = v2.functional.get_size(inputs[0])
         h = random.randint(self.min_size, min(h0, self.max_size))
-        i, j, ch, cw = v2.RandomCrop.get_params(image, [h, w])
-
-        target = _wrap_target(target, (h0, w0))
-        image = F.crop(image, i, j, ch, cw)
-        target["boxes"] = F.crop(target["boxes"], i, j, ch, cw)
-        if "masks" in target:
-            target["masks"] = F.crop(target["masks"], i, j, ch, cw)
-        target["size"] = torch.tensor([ch, cw])
-
-        boxes = target["boxes"]
-        keep = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
-        _filter_instances(target, keep)
-        if "area" in target and "boxes" in target:
-            b = target["boxes"]
-            target["area"] = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
-        return image, target
+        w = random.randint(self.min_size, min(w0, self.max_size))
+        return v2.RandomCrop([h, w])(*inputs)
 
 
-# ---------------------------------------------------------------------------
-# Compositional / image-level transforms
-# ---------------------------------------------------------------------------
+class FinalizeTargets:
+    """Last step of the DETR pipeline.
 
-
-class RandomSelect:
-    """Randomly applies *transforms1* with probability *p*, else *transforms2*."""
-
-    def __init__(self, transforms1, transforms2, p: float = 0.5):
-        self.transforms1 = transforms1
-        self.transforms2 = transforms2
-        self.p = p
-
-    def __call__(self, image, target):
-        chosen = self.transforms1 if random.random() < self.p else self.transforms2
-        return chosen(image, target)
-
-
-class ToTensor:
-    def __init__(self):
-        self._t = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
-
-    def __call__(self, image, target):
-        return self._t(image), target
-
-
-class NormalizeImage:
-    """Image-only ``v2.Normalize`` wrapper that leaves the target dict untouched.
-
-    Geometric augmentations may safely be appended after this transform; box
-    coordinates remain in pixel-space xyxy until :class:`BoxToNormalizedCXCYWH`
-    converts them at the end of the pipeline.
+    * Drops degenerate boxes (and their sibling per-instance fields).
+    * Recomputes ``target['area']`` from the surviving pixel-space boxes.
+    * Converts boxes to normalised cxcywh in ``[0, 1]``.
+    * Stores the current image size as ``target['size']``.
     """
 
-    def __init__(self, mean, std):
-        self._n = v2.Normalize(mean=list(mean), std=list(std))
+    _PER_INSTANCE_KEYS = ("boxes", "labels", "area", "iscrowd", "masks", "keypoints")
 
-    def __call__(self, image, target=None):
-        return self._n(image), target
-
-
-class BoxToNormalizedCXCYWH:
-    """Final step of the DETR pipeline: convert boxes to normalised cxcywh.
-
-    The current canvas size is taken from the image tensor's spatial shape so
-    this transform is robust to any preceding geometric augmentation.
-    """
-
-    def __call__(self, image, target=None):
-        if target is None:
-            return image, None
+    def __call__(self, image, target):
         target = dict(target)
-        h, w = image.shape[-2:]
-        if "boxes" in target:
-            boxes = target["boxes"]
-            if isinstance(boxes, tv_tensors.BoundingBoxes):
-                boxes = boxes.as_subclass(torch.Tensor)
-            boxes = box_convert(boxes, "xyxy", "cxcywh")
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
-            target["boxes"] = boxes
-        if "masks" in target and isinstance(target["masks"], tv_tensors.Mask):
-            target["masks"] = target["masks"].as_subclass(torch.Tensor)
+        boxes = target.get("boxes")
+        if isinstance(boxes, tv_tensors.BoundingBoxes):
+            xyxy = boxes.as_subclass(torch.Tensor).float()
+            keep = (xyxy[:, 2] > xyxy[:, 0]) & (xyxy[:, 3] > xyxy[:, 1])
+            n = xyxy.shape[0]
+            for key in self._PER_INSTANCE_KEYS:
+                val = target.get(key)
+                if torch.is_tensor(val) and val.shape and val.shape[0] == n:
+                    target[key] = val[keep]
+            xyxy = xyxy[keep]
+            h, w = boxes.canvas_size
+            target["area"] = (xyxy[:, 2] - xyxy[:, 0]) * (xyxy[:, 3] - xyxy[:, 1])
+            cxcywh = box_convert(xyxy, "xyxy", "cxcywh")
+            target["boxes"] = cxcywh / torch.tensor([w, h, w, h], dtype=torch.float32)
+        masks = target.get("masks")
+        if isinstance(masks, tv_tensors.Mask):
+            target["masks"] = masks.as_subclass(torch.Tensor)
+        target["size"] = torch.as_tensor(image.shape[-2:])
         return image, target
-
-
-class Normalize:
-    """Legacy fused transform: image normalisation + boxes → normalised cxcywh.
-
-    Preserved for backwards compatibility with ``make_coco_transforms``. New
-    code should use :class:`NormalizeImage` followed by
-    :class:`BoxToNormalizedCXCYWH`.
-    """
-
-    def __init__(self, mean, std):
-        self._image = NormalizeImage(mean, std)
-        self._boxes = BoxToNormalizedCXCYWH()
-
-    def __call__(self, image, target=None):
-        image, target = self._image(image, target)
-        return self._boxes(image, target)
-
-
-class Compose:
-    def __init__(self, transforms):
-        self.transforms = transforms
-
-    def __call__(self, image, target):
-        for t in self.transforms:
-            image, target = t(image, target)
-        return image, target
-
-    def __repr__(self) -> str:
-        body = "\n".join(f"    {t}" for t in self.transforms)
-        return f"{self.__class__.__name__}(\n{body}\n)"
-
-
-# ---------------------------------------------------------------------------
-# COCO transform pipelines
-# ---------------------------------------------------------------------------
 
 
 def make_coco_transforms(
     image_set: str, params: Augmentation | None = None
-) -> Compose:
-    if params is None:
-        params = Augmentation()
-
-    normalize = Compose(
-        [ToTensor(), Normalize(params.normalize_mean, params.normalize_std)]
-    )
-
-    if image_set == "train":
-        return Compose(
-            [
-                RandomHorizontalFlip(p=params.hflip_prob),
-                RandomSelect(
-                    RandomResize(params.scales, max_size=params.max_size),
-                    Compose(
-                        [
-                            RandomResize(params.pre_crop_scales),
-                            RandomSizeCrop(params.crop_min_size, params.crop_max_size),
-                            RandomResize(params.scales, max_size=params.max_size),
-                        ]
-                    ),
-                    p=1.0 - params.crop_branch_prob,
-                ),
-                normalize,
-            ]
-        )
-
+) -> v2.Compose:
+    """Build the full train or val COCO pipeline."""
+    params = params or Augmentation()
+    tail = [
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=params.normalize_mean, std=params.normalize_std),
+        FinalizeTargets(),
+    ]
     if image_set == "val":
-        return Compose(
+        return v2.Compose(
             [
-                RandomResize([max(params.scales)], max_size=params.max_size),
-                normalize,
+                v2.Resize(
+                    max(params.scales), max_size=params.max_size, antialias=True
+                ),
+                *tail,
             ]
         )
-
-    raise ValueError(f"unknown {image_set}")
+    if image_set == "train":
+        return v2.Compose(
+            [
+                v2.RandomHorizontalFlip(p=params.hflip_prob),
+                v2.RandomChoice(
+                    [
+                        RandomResize(params.scales, max_size=params.max_size),
+                        v2.Compose(
+                            [
+                                RandomResize(params.pre_crop_scales),
+                                RandomSizeCrop(
+                                    params.crop_min_size, params.crop_max_size
+                                ),
+                                RandomResize(
+                                    params.scales, max_size=params.max_size
+                                ),
+                            ]
+                        ),
+                    ],
+                    p=[1 - params.crop_branch_prob, params.crop_branch_prob],
+                ),
+                *tail,
+            ]
+        )
+    raise ValueError(f"unknown image_set {image_set!r}")

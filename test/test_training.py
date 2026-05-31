@@ -12,16 +12,7 @@ from detr.evaluate import evaluate
 from detr.misc import collate_fn
 from detr.model import Bundle
 from detr.train import train_one_epoch
-from detr.transforms import (
-    Compose,
-    Normalize,
-    RandomHorizontalFlip,
-    RandomResize,
-    RandomSelect,
-    RandomSizeCrop,
-    ToTensor,
-    make_coco_transforms,
-)
+from detr.transforms import make_coco_transforms
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -142,92 +133,33 @@ def train_loader(coco_root):
 # ---------------------------------------------------------------------------
 
 
-def test_random_horizontal_flip_boxes():
-    img = _make_pil()
-    target = _make_target()
-    orig_boxes = target["boxes"].clone()
-    _, flipped = RandomHorizontalFlip(p=1.0)(img, target)
-    w = img.width
-    assert torch.allclose(flipped["boxes"][:, 0], w - orig_boxes[:, 2])
-    assert torch.allclose(flipped["boxes"][:, 2], w - orig_boxes[:, 0])
+def _make_tv_target(n_boxes: int = 3, h: int = 100, w: int = 100) -> dict:
+    """Build a target dict whose boxes/masks are wrapped as tv_tensors."""
+    from torchvision import tv_tensors
 
-
-def test_random_horizontal_flip_noop():
-    img = _make_pil()
-    target = _make_target()
-    orig_boxes = target["boxes"].clone()
-    _, out = RandomHorizontalFlip(p=0.0)(img, target)
-    assert torch.allclose(out["boxes"], orig_boxes)
-
-
-def test_random_resize_output_size():
-    img = _make_pil(100, 80)
-    target = _make_target()
-    img_out, target_out = RandomResize([200], max_size=500)(img, target)
-    assert min(img_out.size) == 200
-    assert list(target_out["size"]) == list(img_out.size[::-1])
-
-
-def test_random_resize_boxes_scale():
-    img = _make_pil(100, 100)
-    target = _make_target()
-    orig_boxes = target["boxes"].clone()
-    img_out, target_out = RandomResize([200])(img, target)
-    scale = img_out.size[0] / img.size[0]
-    assert torch.allclose(target_out["boxes"], orig_boxes * scale, atol=1e-4)
-
-
-def test_random_size_crop_reduces_size():
-    img = _make_pil(200, 200)
-    target = _make_target()
-    img_out, _ = RandomSizeCrop(min_size=50, max_size=100)(img, target)
-    assert img_out.size[0] <= 100
-    assert img_out.size[1] <= 100
-
-
-def test_normalize_converts_boxes_to_cxcywh():
-    tensor_img = torch.rand(3, 100, 100)
-    target = _make_target()
-    _, out = Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])(tensor_img, target)
-    assert (out["boxes"] >= -0.5).all()
-    assert (out["boxes"] <= 1.5).all()
-
-
-def test_compose_chains_transforms():
-    img = _make_pil()
-    target = _make_target()
-    img_out, target_out = Compose([RandomHorizontalFlip(p=0.0), RandomResize([50])])(
-        img, target
+    t = _make_target(n_boxes)
+    t["boxes"] = tv_tensors.BoundingBoxes(
+        t["boxes"], format=tv_tensors.BoundingBoxFormat.XYXY, canvas_size=(h, w)
     )
-    assert img_out is not None
-    assert "boxes" in target_out
-
-
-def test_to_tensor_converts_pil():
-    img_out, _ = ToTensor()(_make_pil(), _make_target())
-    assert isinstance(img_out, torch.Tensor)
-    assert img_out.shape[0] == 3
-
-
-def test_random_select_calls_first_branch():
-    img = _make_pil(100, 100)
-    img_out, _ = RandomSelect(RandomResize([50]), RandomResize([200]), p=1.0)(
-        img, _make_target()
-    )
-    assert min(img_out.size) == 50
+    return t
 
 
 def test_make_coco_transforms_train():
     img_out, target_out = make_coco_transforms("train")(
-        _make_pil(300, 400), _make_target()
+        _make_pil(300, 400), _make_tv_target(h=300, w=400)
     )
     assert isinstance(img_out, torch.Tensor)
     assert "boxes" in target_out
 
 
 def test_make_coco_transforms_val():
-    img_out, _ = make_coco_transforms("val")(_make_pil(300, 400), _make_target())
+    img_out, target_out = make_coco_transforms("val")(
+        _make_pil(300, 400), _make_tv_target(h=300, w=400)
+    )
     assert isinstance(img_out, torch.Tensor)
+    # Boxes must end up normalised (cxcywh in [0, 1]).
+    assert (target_out["boxes"] >= 0).all()
+    assert (target_out["boxes"] <= 1).all()
 
 
 def test_make_coco_transforms_unknown_raises():

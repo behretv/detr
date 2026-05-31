@@ -10,21 +10,21 @@ import torch.nn as nn
 import torchvision.transforms.v2 as v2
 
 import detr.parameters as parameters
-from detr.transforms import NormalizeImage, RandomResize, ToTensor
 
 
 def default_transforms() -> list[v2.Transform]:
     """Standard inference / base transforms.
 
-    ``RandomResize([800], max_size=1333)`` matches the validation pipeline of
-    ``make_coco_transforms`` and keeps the DETR encoder's attention map within
-    a tractable memory budget; without it, native-resolution images quickly
-    blow up GPU memory.
+    The short-side ``v2.Resize`` matches the validation pipeline of
+    :func:`detr.transforms.make_coco_transforms` and keeps the DETR encoder's
+    attention map within a tractable memory budget; without it, native-resolution
+    images quickly blow up GPU memory.
     """
     return [
-        RandomResize([800], max_size=1333),
-        ToTensor(),
-        NormalizeImage([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        v2.Resize(800, max_size=1333, antialias=True),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 
 

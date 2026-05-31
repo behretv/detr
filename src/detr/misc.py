@@ -6,7 +6,6 @@ Mostly copy-paste from torchvision references.
 """
 
 import torch
-import torchvision
 from torch import Tensor
 
 
@@ -47,22 +46,9 @@ class NestedTensor(object):
         return str(self.tensors)
 
 
-@torch.jit.unused
-def _dispatch_onnx_nested_tensor(tensor_list: list[Tensor]) -> NestedTensor:
-    # Lazy import to avoid a circular dependency with detr.onnx.
-    from detr.onnx import _onnx_nested_tensor_from_tensor_list
-
-    return _onnx_nested_tensor_from_tensor_list(tensor_list)
-
-
 def nested_tensor_from_tensor_list(tensor_list: list[Tensor]):
     # TODO make this more general
     if tensor_list[0].ndim == 3:
-        if torchvision._is_tracing():
-            # nested_tensor_from_tensor_list() does not export well to ONNX;
-            # use the tracing-friendly variant from detr.onnx instead.
-            return _dispatch_onnx_nested_tensor(tensor_list)
-
         # TODO make it support different-sized images
         max_size = _max_by_axis([list(img.shape) for img in tensor_list])
         # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))

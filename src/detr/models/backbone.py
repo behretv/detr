@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torchvision
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
-from torchvision.ops.misc import FrozenBatchNorm2d
+from torchvision.ops import FrozenBatchNorm2d
 
 import detr.parameters as parameters
 from detr.misc import NestedTensor

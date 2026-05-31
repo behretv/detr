@@ -10,42 +10,39 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import torch
+import torchvision.transforms.v2 as v2
 from tqdm import tqdm
 
 from detr.evaluate import evaluate
 from detr.logger import MetricLogger, SmoothedValue
 from detr.model import Bundle
 from detr.parameters import Augmentation, Train
-from detr.transforms import (
-    Compose,
-    RandomHorizontalFlip,
-    RandomResize,
-    RandomSelect,
-    RandomSizeCrop,
-)
+from detr.transforms import RandomResize, RandomSizeCrop
 
 
 def augmentation_transforms(params: Augmentation | None = None) -> list:
     """Return the geometric augmentation transforms parametrised by *params*.
 
-    The returned list is meant to be appended to a base
-    ``[ToTensor, NormalizeImage]`` pipeline.  Box format conversion is added
-    automatically downstream by :func:`detr.aux.load_dataset`.
+    The returned list is meant to be appended to a base pipeline ending in
+    ``Normalize``. :class:`~detr.transforms.FinalizeTargets` is added automatically
+    downstream by :func:`detr.aux.load_dataset`.
     """
     if params is None:
         params = Augmentation()
     return [
-        RandomHorizontalFlip(p=params.hflip_prob),
-        RandomSelect(
-            RandomResize(params.scales, max_size=params.max_size),
-            Compose(
-                [
-                    RandomResize(params.pre_crop_scales),
-                    RandomSizeCrop(params.crop_min_size, params.crop_max_size),
-                    RandomResize(params.scales, max_size=params.max_size),
-                ]
-            ),
-            p=1.0 - params.crop_branch_prob,
+        v2.RandomHorizontalFlip(p=params.hflip_prob),
+        v2.RandomChoice(
+            [
+                RandomResize(params.scales, max_size=params.max_size),
+                v2.Compose(
+                    [
+                        RandomResize(params.pre_crop_scales),
+                        RandomSizeCrop(params.crop_min_size, params.crop_max_size),
+                        RandomResize(params.scales, max_size=params.max_size),
+                    ]
+                ),
+            ],
+            p=[1.0 - params.crop_branch_prob, params.crop_branch_prob],
         ),
     ]
 

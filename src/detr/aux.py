@@ -6,11 +6,12 @@ import os
 from pathlib import Path
 from typing import Iterable, Sequence
 
+import torchvision.transforms.v2 as v2
 from torch.utils.data import DataLoader
 
 from detr.dataset import CocoDetection
 from detr.misc import collate_fn
-from detr.transforms import BoxToNormalizedCXCYWH, Compose
+from detr.transforms import FinalizeTargets
 
 DATA_ROOT: Path = Path(os.environ.get("DETR_DATA_ROOT", "/mnt/data"))
 """Root directory for datasets and model artefacts.
@@ -21,7 +22,7 @@ Override via the ``DETR_DATA_ROOT`` environment variable.
 
 def load_dataset(
     ann_file: Path | str,
-    transforms: Sequence | Compose,
+    transforms: Sequence | v2.Compose,
     shuffle: bool = True,
     batch_size: int = 2,
     num_workers: int = 2,
@@ -36,9 +37,9 @@ def load_dataset(
         Path to a COCO-format ``*.json`` file. Image files are expected to live
         in the same directory unless ``img_folder`` is provided.
     transforms:
-        Either a :class:`~detr.transforms.Compose` or a list of transforms.
-        :class:`~detr.transforms.BoxToNormalizedCXCYWH` is appended automatically
-        if not already present, so callers can freely concatenate base and
+        Either a :class:`v2.Compose` or a list of transforms.
+        :class:`~detr.transforms.FinalizeTargets` is appended automatically if
+        not already present, so callers can freely concatenate base and
         augmentation transforms in either order.
     shuffle:
         Whether the loader should reshuffle each epoch.
@@ -50,20 +51,20 @@ def load_dataset(
     ann_file = Path(ann_file)
     img_folder = Path(img_folder) if img_folder is not None else ann_file.parent
 
-    if isinstance(transforms, Compose):
+    if isinstance(transforms, v2.Compose):
         items = list(transforms.transforms)
     elif isinstance(transforms, Iterable):
         items = list(transforms)
     else:
         raise TypeError(
-            f"transforms must be a Compose or iterable, got {type(transforms).__name__}"
+            f"transforms must be a v2.Compose or iterable, got {type(transforms).__name__}"
         )
 
-    if not any(isinstance(t, BoxToNormalizedCXCYWH) for t in items):
-        items.append(BoxToNormalizedCXCYWH())
+    if not any(isinstance(t, FinalizeTargets) for t in items):
+        items.append(FinalizeTargets())
 
     dataset = CocoDetection(
-        img_folder, ann_file, transforms=Compose(items), return_masks=return_masks
+        img_folder, ann_file, transforms=v2.Compose(items), return_masks=return_masks
     )
     return DataLoader(
         dataset,

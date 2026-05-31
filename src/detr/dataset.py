@@ -13,6 +13,7 @@ import torch
 import torch.utils.data
 import torchvision
 from pycocotools import mask as coco_mask
+from torchvision import tv_tensors
 
 import detr.parameters as parameters
 from detr.transforms import make_coco_transforms
@@ -127,10 +128,12 @@ class ConvertCocoPolysToMask(object):
             keypoints = keypoints[keep]
 
         target = {}
-        target["boxes"] = boxes
+        target["boxes"] = tv_tensors.BoundingBoxes(
+            boxes, format=tv_tensors.BoundingBoxFormat.XYXY, canvas_size=(h, w)
+        )
         target["labels"] = classes
         if self.return_masks:
-            target["masks"] = masks
+            target["masks"] = tv_tensors.Mask(masks)
         target["image_id"] = image_id
         if keypoints is not None:
             target["keypoints"] = keypoints
@@ -144,6 +147,5 @@ class ConvertCocoPolysToMask(object):
         target["iscrowd"] = iscrowd[keep]
 
         target["orig_size"] = torch.as_tensor([int(h), int(w)])
-        target["size"] = torch.as_tensor([int(h), int(w)])
 
         return image, target
