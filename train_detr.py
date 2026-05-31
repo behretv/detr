@@ -11,7 +11,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from detr import aux, model, train
+from detr import aux, model, train, parameters
 
 
 def main(args: argparse.Namespace):
@@ -41,7 +41,7 @@ def main(args: argparse.Namespace):
     t_loader = aux.load_dataset(t_file, t_transforms, shuffle=True, batch_size=args.batch_size)
     v_loader = aux.load_dataset(v_file, model_data.transforms, shuffle=False, batch_size=args.batch_size)
 
-    new_model_data = train.run(model_data, t_loader, v_loader, params=train.Parameter(batch_size=args.batch_size))
+    new_model_data = train.run(model_data, t_loader, v_loader, params=parameters.Train(batch_size=args.batch_size))
 
     # Export model + logs
     if args.dir_output:

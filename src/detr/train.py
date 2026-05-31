@@ -24,17 +24,6 @@ from detr.transforms import (
     RandomSizeCrop,
 )
 
-# Public aliases — the external API treats ``Train`` as the generic
-# "training Parameter" container.
-Parameter = Train
-__all__ = [
-    "Augmentation",
-    "Parameter",
-    "augmentation_transforms",
-    "run",
-    "train_one_epoch",
-]
-
 
 def augmentation_transforms(params: Augmentation | None = None) -> list:
     """Return the geometric augmentation transforms parametrised by *params*.
