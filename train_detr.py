@@ -21,7 +21,7 @@ def main(args: argparse.Namespace):
     v_file = args.dataset / "valid.coco.json"
 
     # Load transformations
-    aug_params = train.Augmentation()
+    aug_params = parameters.Augmentation()
 
     # Load model
     model_data = model.load_from_file(args.model, args.device)

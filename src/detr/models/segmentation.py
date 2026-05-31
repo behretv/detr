@@ -11,11 +11,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 from torch import Tensor
-from torchvision.ops.misc import interpolate
+from torchvision.ops import box_convert
 
 from detr.misc import (
     NestedTensor,
-    box_cxcywh_to_xyxy,
     nested_tensor_from_tensor_list,
 )
 
@@ -342,10 +341,10 @@ class PostProcessPanoptic(nn.Module):
             cur_scores = cur_scores[keep]
             cur_classes = cur_classes[keep]
             cur_masks = cur_masks[keep]
-            cur_masks = interpolate(
+            cur_masks = F.interpolate(
                 cur_masks[:, None], to_tuple(size), mode="bilinear"
             ).squeeze(1)
-            cur_boxes = box_cxcywh_to_xyxy(cur_boxes[keep])
+            cur_boxes = box_convert(cur_boxes[keep], "cxcywh", "xyxy")
 
             h, w = cur_masks.shape[-2:]
             if len(cur_boxes) != len(cur_classes):

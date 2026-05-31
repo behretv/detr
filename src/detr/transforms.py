@@ -19,7 +19,8 @@ import torchvision.transforms.v2.functional as F
 from PIL import Image
 from torchvision import tv_tensors
 
-from detr.misc import box_xyxy_to_cxcywh
+from torchvision.ops import box_convert
+
 from detr.parameters import Augmentation
 
 
@@ -211,7 +212,7 @@ class BoxToNormalizedCXCYWH:
             boxes = target["boxes"]
             if isinstance(boxes, tv_tensors.BoundingBoxes):
                 boxes = boxes.as_subclass(torch.Tensor)
-            boxes = box_xyxy_to_cxcywh(boxes)
+            boxes = box_convert(boxes, "xyxy", "cxcywh")
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         if "masks" in target and isinstance(target["masks"], tv_tensors.Mask):

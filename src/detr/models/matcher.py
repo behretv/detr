@@ -6,10 +6,9 @@ Modules to compute the matching cost and solve the corresponding LSAP.
 import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
-from torchvision.ops.boxes import generalized_box_iou
+from torchvision.ops import box_convert, generalized_box_iou
 
 import detr.parameters as parameters
-from detr.misc import box_cxcywh_to_xyxy
 
 
 class HungarianMatcher(nn.Module):
@@ -80,7 +79,8 @@ class HungarianMatcher(nn.Module):
 
         # Compute the giou cost betwen boxes
         cost_giou = -generalized_box_iou(
-            box_cxcywh_to_xyxy(out_bbox), box_cxcywh_to_xyxy(tgt_bbox)
+            box_convert(out_bbox, "cxcywh", "xyxy"),
+            box_convert(tgt_bbox, "cxcywh", "xyxy"),
         )
 
         # Final cost matrix
