@@ -30,6 +30,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         image_set: str,
         data_params: parameters.Data,
         model_params: parameters.Model,
+        aug_params: parameters.Augmentation | None = None,
     ) -> CocoDetection:
         root = Path(data_params.coco_path)
         if not root.exists():
@@ -42,7 +43,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         return cls(
             img_folder,
             ann_file,
-            transforms=make_coco_transforms(image_set),
+            transforms=make_coco_transforms(image_set, aug_params),
             return_masks=model_params.masks,
         )
 

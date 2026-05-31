@@ -20,6 +20,7 @@ from PIL import Image
 from torchvision import tv_tensors
 
 from detr.misc import box_xyxy_to_cxcywh
+from detr.parameters import Augmentation
 
 
 # ---------------------------------------------------------------------------
@@ -222,25 +223,30 @@ class Compose:
 # ---------------------------------------------------------------------------
 
 
-def make_coco_transforms(image_set: str) -> Compose:
+def make_coco_transforms(
+    image_set: str, params: Augmentation | None = None
+) -> Compose:
+    if params is None:
+        params = Augmentation()
+
     normalize = Compose(
-        [ToTensor(), Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
+        [ToTensor(), Normalize(params.normalize_mean, params.normalize_std)]
     )
-    scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
 
     if image_set == "train":
         return Compose(
             [
-                RandomHorizontalFlip(),
+                RandomHorizontalFlip(p=params.hflip_prob),
                 RandomSelect(
-                    RandomResize(scales, max_size=1333),
+                    RandomResize(params.scales, max_size=params.max_size),
                     Compose(
                         [
-                            RandomResize([400, 500, 600]),
-                            RandomSizeCrop(384, 600),
-                            RandomResize(scales, max_size=1333),
+                            RandomResize(params.pre_crop_scales),
+                            RandomSizeCrop(params.crop_min_size, params.crop_max_size),
+                            RandomResize(params.scales, max_size=params.max_size),
                         ]
                     ),
+                    p=1.0 - params.crop_branch_prob,
                 ),
                 normalize,
             ]
@@ -249,7 +255,7 @@ def make_coco_transforms(image_set: str) -> Compose:
     if image_set == "val":
         return Compose(
             [
-                RandomResize([800], max_size=1333),
+                RandomResize([max(params.scales)], max_size=params.max_size),
                 normalize,
             ]
         )

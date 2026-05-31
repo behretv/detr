@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import argparse
 import types as _types
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from typing import Union, get_args, get_origin, get_type_hints
+
+
+def _default_value(f):
+    """Resolve a dataclass field's default, calling its factory if necessary."""
+    if f.default is not MISSING:
+        return f.default
+    if f.default_factory is not MISSING:  # type: ignore[misc]
+        return f.default_factory()
+    return None
 
 
 def add_args(parser: argparse.ArgumentParser, cls: type) -> None:
@@ -12,6 +21,7 @@ def add_args(parser: argparse.ArgumentParser, cls: type) -> None:
     for f in fields(cls):
         arg_name = f"--{f.name}"
         ftype = hints[f.name]
+        default = _default_value(f)
 
         help_text = f.metadata.get("help", None)
         required = f.metadata.get("required", False)
@@ -20,25 +30,36 @@ def add_args(parser: argparse.ArgumentParser, cls: type) -> None:
         if origin is Union or origin is _types.UnionType:
             type_args = [a for a in get_args(ftype) if a is not type(None)]
             ftype = type_args[0] if type_args else str
+            origin = get_origin(ftype)
 
-        if ftype is bool:
-            if f.default is False:
+        if origin is list:
+            (elem_type,) = get_args(ftype) or (str,)
+            parser.add_argument(
+                arg_name,
+                type=elem_type,
+                nargs="+",
+                default=default,
+                help=help_text,
+                required=required,
+            )
+        elif ftype is bool:
+            if default is False:
                 parser.add_argument(
-                    arg_name, action="store_true", default=f.default, help=help_text
+                    arg_name, action="store_true", default=default, help=help_text
                 )
             else:
                 parser.add_argument(
                     f"--no-{f.name}",
                     dest=f.name,
                     action="store_false",
-                    default=f.default,
+                    default=default,
                     help=help_text,
                 )
         else:
             parser.add_argument(
                 arg_name,
                 type=ftype,
-                default=f.default,
+                default=default,
                 help=help_text,
                 required=required,
             )
@@ -218,4 +239,52 @@ class Run:
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> Run:
+        return cls(**{f.name: getattr(args, f.name) for f in fields(cls)})
+
+
+@dataclass
+class Augmentation:
+    """Parameters controlling the COCO data-augmentation pipeline."""
+
+    hflip_prob: float = field(
+        default=0.5,
+        metadata={"help": "Probability of horizontal-flipping training images"},
+    )
+    scales: list[int] = field(
+        default_factory=lambda: [
+            480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800,
+        ],
+        metadata={"help": "Candidate short-side sizes for the final random resize"},
+    )
+    max_size: int = field(
+        default=1333,
+        metadata={"help": "Maximum long-side size enforced during random resize"},
+    )
+    crop_branch_prob: float = field(
+        default=0.5,
+        metadata={
+            "help": "Probability of taking the resize+crop+resize branch instead of a plain resize"
+        },
+    )
+    pre_crop_scales: list[int] = field(
+        default_factory=lambda: [400, 500, 600],
+        metadata={"help": "Short-side sizes used to resize before the random crop"},
+    )
+    crop_min_size: int = field(
+        default=384, metadata={"help": "Minimum size for RandomSizeCrop"}
+    )
+    crop_max_size: int = field(
+        default=600, metadata={"help": "Maximum size for RandomSizeCrop"}
+    )
+    normalize_mean: list[float] = field(
+        default_factory=lambda: [0.485, 0.456, 0.406],
+        metadata={"help": "Per-channel mean used by Normalize"},
+    )
+    normalize_std: list[float] = field(
+        default_factory=lambda: [0.229, 0.224, 0.225],
+        metadata={"help": "Per-channel std used by Normalize"},
+    )
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Augmentation:
         return cls(**{f.name: getattr(args, f.name) for f in fields(cls)})
