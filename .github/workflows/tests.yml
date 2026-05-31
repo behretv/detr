@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: hmcvlab/computer-vision:latest
+      options: --user root
 
     steps:
       - uses: actions/checkout@v4
