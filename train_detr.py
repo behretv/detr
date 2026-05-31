@@ -34,7 +34,6 @@ def main(args: argparse.Namespace):
     # Load transforms
     t_transforms = model_data.transforms
     if args.augment:
-        model_data.with_augmentation = True
         t_transforms += train.augmentation_transforms(aug_params)
 
     # Load dataset

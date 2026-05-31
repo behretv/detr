@@ -58,10 +58,6 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device):
 
     tqdm.write("Averaged stats: " + str(metric_logger))
     if coco_evaluator is not None:
-        coco_evaluator.synchronize_between_processes()
-
-    # accumulate predictions from all images
-    if coco_evaluator is not None:
         coco_evaluator.accumulate()
         coco_evaluator.summarize()
     stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}

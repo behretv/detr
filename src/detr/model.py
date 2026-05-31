@@ -45,7 +45,6 @@ class Bundle:
     transforms    : inference / validation transforms applied to inputs.
     cats          : mapping from COCO category id → category name.
     device        : ``"cuda"`` when a GPU is available, otherwise ``"cpu"``.
-    with_augmentation : whether training-time augmentation is enabled.
     logs          : list of per-epoch stat dicts appended during training.
     """
 
@@ -62,7 +61,6 @@ class Bundle:
     device: str = field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu"
     )
-    with_augmentation: bool = False
     logs: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
@@ -126,7 +124,6 @@ class Bundle:
                 "source": self.source,
                 "cats": self.cats,
                 "device": self.device,
-                "with_augmentation": self.with_augmentation,
             },
             Path(file).with_suffix(".pth"),
         )
@@ -201,7 +198,6 @@ class Bundle:
             transforms=transforms or [],
             cats=checkpoint.get("cats", {}),
             device=resolved_device,
-            with_augmentation=checkpoint.get("with_augmentation", False),
             logs=logs,
         )
 

@@ -48,7 +48,6 @@ def main(args):
     if not model_params.masks:
         raise ValueError("--masks must be set for segmentation training")
 
-    print(f"git:\n  {utils.get_sha()}\n")
     print(train_params, model_params, loss_params, data_params, run_params)
 
     device = torch.device(run_params.device)

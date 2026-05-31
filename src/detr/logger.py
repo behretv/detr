@@ -1,11 +1,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""Logging utilities: metric tracking and git-SHA reporting."""
+"""Logging utilities: smoothed metric tracking with a tqdm-driven iterator."""
 
 from __future__ import annotations
 
 import datetime
-import os
-import subprocess
 import time
 from collections import defaultdict, deque
 
@@ -126,24 +124,3 @@ class MetricLogger:
         tqdm.write(
             f"{header} Total time: {total_time_str} ({total_time / len(iterable):.4f} s / it)"
         )
-
-
-def get_sha() -> str:
-    """Return a string with the current git SHA, diff status, and branch."""
-    cwd = os.path.dirname(os.path.abspath(__file__))
-
-    def _run(command):
-        return subprocess.check_output(command, cwd=cwd).decode("ascii").strip()
-
-    sha = "N/A"
-    diff = "clean"
-    branch = "N/A"
-    try:
-        sha = _run(["git", "rev-parse", "HEAD"])
-        subprocess.check_output(["git", "diff"], cwd=cwd)
-        diff = _run(["git", "diff-index", "HEAD"])
-        diff = "has uncommited changes" if diff else "clean"
-        branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-    except Exception:
-        pass
-    return f"sha: {sha}, status: {diff}, branch: {branch}"

@@ -1,10 +1,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""
-COCO evaluator that works in distributed mode.
+"""COCO evaluator.
 
-Mostly copy-paste from https://github.com/pytorch/vision/blob/edfd5a7/references/detection/coco_eval.py
-The difference is that there is less copy-pasting from pycocotools
-in the end of the file, as python3 can suppress prints with contextlib
+Adapted from https://github.com/pytorch/vision/blob/edfd5a7/references/detection/coco_eval.py
+with the distributed-sync plumbing dropped and pycocotools' chatty
+``evaluate`` replaced by a stdout-suppressed copy.
 """
 
 import contextlib
@@ -54,15 +53,13 @@ class CocoEvaluator(object):
 
             self.eval_imgs[iou_type].append(eval_imgs)
 
-    def synchronize_between_processes(self):
-        for iou_type in self.iou_types:
-            self.eval_imgs[iou_type] = np.concatenate(self.eval_imgs[iou_type], 2)
-            create_common_coco_eval(
-                self.coco_eval[iou_type], self.img_ids, self.eval_imgs[iou_type]
-            )
-
     def accumulate(self):
-        for coco_eval in self.coco_eval.values():
+        img_ids, idx = np.unique(np.array(self.img_ids), return_index=True)
+        for iou_type, coco_eval in self.coco_eval.items():
+            eval_imgs = np.concatenate(self.eval_imgs[iou_type], axis=2)[..., idx]
+            coco_eval.evalImgs = eval_imgs.flatten().tolist()
+            coco_eval.params.imgIds = list(img_ids)
+            coco_eval._paramsEval = copy.deepcopy(coco_eval.params)
             coco_eval.accumulate()
 
     def summarize(self):
@@ -75,8 +72,6 @@ class CocoEvaluator(object):
             return self.prepare_for_coco_detection(predictions)
         elif iou_type == "segm":
             return self.prepare_for_coco_segmentation(predictions)
-        elif iou_type == "keypoints":
-            return self.prepare_for_coco_keypoint(predictions)
         else:
             raise ValueError(f"Unknown iou type {iou_type}")
 
@@ -141,57 +136,10 @@ class CocoEvaluator(object):
             )
         return coco_results
 
-    def prepare_for_coco_keypoint(self, predictions):
-        coco_results = []
-        for original_id, prediction in predictions.items():
-            if len(prediction) == 0:
-                continue
-
-            boxes = prediction["boxes"]
-            boxes = convert_to_xywh(boxes).tolist()
-            scores = prediction["scores"].tolist()
-            labels = prediction["labels"].tolist()
-            keypoints = prediction["keypoints"]
-            keypoints = keypoints.flatten(start_dim=1).tolist()
-
-            coco_results.extend(
-                [
-                    {
-                        "image_id": original_id,
-                        "category_id": labels[k],
-                        "keypoints": keypoint,
-                        "score": scores[k],
-                    }
-                    for k, keypoint in enumerate(keypoints)
-                ]
-            )
-        return coco_results
-
 
 def convert_to_xywh(boxes):
     xmin, ymin, xmax, ymax = boxes.unbind(1)
     return torch.stack((xmin, ymin, xmax - xmin, ymax - ymin), dim=1)
-
-
-def merge(img_ids, eval_imgs):
-    merged_img_ids = np.array(img_ids)
-    merged_eval_imgs = np.concatenate([eval_imgs], 2)
-
-    # keep only unique (and in sorted order) images
-    merged_img_ids, idx = np.unique(merged_img_ids, return_index=True)
-    merged_eval_imgs = merged_eval_imgs[..., idx]
-
-    return merged_img_ids, merged_eval_imgs
-
-
-def create_common_coco_eval(coco_eval, img_ids, eval_imgs):
-    img_ids, eval_imgs = merge(img_ids, eval_imgs)
-    img_ids = list(img_ids)
-    eval_imgs = list(eval_imgs.flatten())
-
-    coco_eval.evalImgs = eval_imgs
-    coco_eval.params.imgIds = img_ids
-    coco_eval._paramsEval = copy.deepcopy(coco_eval.params)
 
 
 #################################################################

@@ -1,267 +1,143 @@
-**DE⫶TR**: End-to-End Object Detection with Transformers
-========
+# DETR — fine-tuning fork
 
-[![Support Ukraine](https://img.shields.io/badge/Support-Ukraine-FFD500?style=flat&labelColor=005BBB)](https://opensource.fb.com/support-ukraine)
+A trimmed fork of [facebookresearch/detr](https://github.com/facebookresearch/detr) focused on **fine-tuning a pretrained DETR checkpoint on a custom COCO-format dataset**. The original distributed-training, panoptic-segmentation, ONNX-export, and Detectron2 code paths have been removed; what remains is a small, dependency-light core built on top of `torchvision.transforms.v2`.
 
-PyTorch training code and pretrained models for **DETR** (**DE**tection **TR**ansformer).
-We replace the full complex hand-crafted object detection pipeline with a Transformer, and match Faster R-CNN with a ResNet-50, obtaining **42 AP** on COCO using half the computation power (FLOPs) and the same number of parameters. Inference in 50 lines of PyTorch.
+For background on the model, see *End-to-End Object Detection with Transformers* (Carion et al., 2020).
 
-![DETR](.github/DETR.png)
+## Installation
 
-**What it is**. Unlike traditional computer vision techniques, DETR approaches object detection as a direct set prediction problem. It consists of a set-based global loss, which forces unique predictions via bipartite matching, and a Transformer encoder-decoder architecture. 
-Given a fixed small set of learned object queries, DETR reasons about the relations of the objects and the global image context to directly output the final set of predictions in parallel. Due to this parallel nature, DETR is very fast and efficient.
+```bash
+pip install -e .[coco]
+```
 
-**About the code**. We believe that object detection should not be more difficult than classification,
-and should not require complex libraries for training and inference.
-DETR is very simple to implement and experiment with, and we provide a
-[standalone Colab Notebook](https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/detr_demo.ipynb)
-showing how to do inference with DETR in only a few lines of PyTorch code.
-Training code follows this idea - it is not a library,
-but simply a [main.py](main.py) importing model and criterion
-definitions with standard training loops.
+Core deps: `torch>=2.0`, `torchvision>=0.15`, `scipy`, `cython`, `submitit`.
+Optional extras: `pycocotools` (`coco`), `panopticapi` (`panoptic`), `flake8` (`dev`).
 
-Additionnally, we provide a Detectron2 wrapper in the d2/ folder. See the readme there for more information.
+## Dataset layout
 
-For details see [End-to-End Object Detection with Transformers](https://ai.facebook.com/research/publications/end-to-end-object-detection-with-transformers) by Nicolas Carion, Francisco Massa, Gabriel Synnaeve, Nicolas Usunier, Alexander Kirillov, and Sergey Zagoruyko.
+`train_detr.py` expects a single directory containing two COCO-format annotation files plus the corresponding images:
 
-See our [blog post](https://ai.facebook.com/blog/end-to-end-object-detection-with-transformers/) to learn more about end to end object detection with transformers.
-# Model Zoo
-We provide baseline DETR and DETR-DC5 models, and plan to include more in future.
-AP is computed on COCO 2017 val5k, and inference time is over the first 100 val5k COCO images,
-with torchscript transformer.
+```
+<dataset>/
+├── train.coco.json
+├── valid.coco.json
+└── *.jpg                # images referenced by either JSON
+```
 
-<table>
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>name</th>
-      <th>backbone</th>
-      <th>schedule</th>
-      <th>inf_time</th>
-      <th>box AP</th>
-      <th>url</th>
-      <th>size</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>DETR</td>
-      <td>R50</td>
-      <td>500</td>
-      <td>0.036</td>
-      <td>42.0</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detr/logs/detr-r50_log.txt">logs</a></td>
-      <td>159Mb</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>DETR-DC5</td>
-      <td>R50</td>
-      <td>500</td>
-      <td>0.083</td>
-      <td>43.3</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r50-dc5-f0fb7ef5.pth">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detr/logs/detr-r50-dc5_log.txt">logs</a></td>
-      <td>159Mb</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>DETR</td>
-      <td>R101</td>
-      <td>500</td>
-      <td>0.050</td>
-      <td>43.5</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r101-2c7b67e5.pth">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detr/logs/detr-r101_log.txt">logs</a></td>
-      <td>232Mb</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>DETR-DC5</td>
-      <td>R101</td>
-      <td>500</td>
-      <td>0.097</td>
-      <td>44.9</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r101-dc5-a2e86def.pth">model</a>&nbsp;|&nbsp;<a href="https://dl.fbaipublicfiles.com/detr/logs/detr-r101-dc5_log.txt">logs</a></td>
-      <td>232Mb</td>
-    </tr>
-  </tbody>
-</table>
+Image paths inside the JSON files are resolved relative to the JSON's parent directory.
 
-COCO val5k evaluation results can be found in this [gist](https://gist.github.com/szagoruyko/9c9ebb8455610958f7deaa27845d7918).
+## Pretrained weights
 
-The models are also available via torch hub,
-to load DETR R50 with pretrained weights simply do:
+Drop a DETR checkpoint anywhere on disk — for example the official R50 weights:
+
+```bash
+mkdir -p /mnt/data/models/detr
+curl -L -o /mnt/data/models/detr/detr-r50-e632da11.pth \
+    https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth
+```
+
+`Bundle.load_from_file` accepts both the original Facebook checkpoint format (`{"model": state_dict}`) and the format produced by this fork's `Bundle.export` (`{"state_dict": ..., "model_params": ..., ...}`).
+
+## Quick start: `train_detr.py`
+
+```bash
+python train_detr.py \
+    --dataset    /path/to/your/dataset \
+    --model      /path/to/detr-r50-e632da11.pth \
+    --batch-size 4 \
+    --augment \
+    --device     cuda \
+    --dir-output /path/to/save
+```
+
+### CLI flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dataset` | `$DETR_DATA_ROOT/datasets/accurate-balls` | Directory containing `train.coco.json` / `valid.coco.json`. |
+| `--model` | `$DETR_DATA_ROOT/models/detr/models/detr-r50-e632da11.pth` | Pretrained checkpoint to fine-tune. **Required.** |
+| `--dir-output` | `$DETR_DATA_ROOT/models/torch` | Where to write the trained `<name>.pth` + `<name>.csv`. Pass an empty value to skip saving. |
+| `--augment` | off | Enable horizontal flip + multi-scale resize / crop training augmentation. |
+| `--device` | `cuda` | `cuda` or `cpu`. |
+| `--batch-size` | `4` | Per-step batch size for both training and validation loaders. |
+
+`DETR_DATA_ROOT` (default `/mnt/data`) is the root used when constructing default paths; override with:
+
+```bash
+export DETR_DATA_ROOT=/your/data/root
+```
+
+### What the script does
+
+1. Loads the checkpoint into a `Bundle` (model + criterion + post-processors + parameters).
+2. Reads category names from `train.coco.json` and attaches them to the bundle as `cats`.
+3. Builds a transform pipeline: the model's base `[Resize, ToImage, ToDtype, Normalize]` plus, with `--augment`, `[RandomHorizontalFlip, RandomChoice(<resize | resize+crop+resize>)]`. `FinalizeTargets` (drop empty boxes, recompute `area`/`size`, normalise boxes to cxcywh in `[0, 1]`) is appended automatically.
+4. Builds train / val `DataLoader`s over the two COCO splits.
+5. Trains for `parameters.Train().epochs` (default **2**) using AdamW with separate LRs for the backbone (`1e-5`) and the rest (`1e-4`), GIoU + L1 + focal loss matching the DETR paper. Validation runs every epoch, including pycocotools AP metrics.
+6. On exit, exports `<dir-output>/<bundle.name>.pth` (state dict + parameter dataclasses + cats) and `<dir-output>/<bundle.name>.csv` (per-epoch metrics).
+
+To change training hyperparameters from defaults, edit `train_detr.py:43` to pass an explicit `parameters.Train(...)` — for example:
+
 ```python
-model = torch.hub.load('facebookresearch/detr:main', 'detr_resnet50', pretrained=True)
+parameters.Train(batch_size=args.batch_size, epochs=50, lr_drop=40)
 ```
 
+## Lower-level scripts
 
-COCO panoptic val5k models:
-<table>
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>name</th>
-      <th>backbone</th>
-      <th>box AP</th>
-      <th>segm AP</th>
-      <th>PQ</th>
-      <th>url</th>
-      <th>size</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>DETR</td>
-      <td>R50</td>
-      <td>38.8</td>
-      <td>31.1</td>
-      <td>43.4</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r50-panoptic-00ce5173.pth">download</a></td>
-      <td>165Mb</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>DETR-DC5</td>
-      <td>R50</td>
-      <td>40.2</td>
-      <td>31.9</td>
-      <td>44.6</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r50-dc5-panoptic-da08f1b1.pth">download</a></td>
-      <td>165Mb</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>DETR</td>
-      <td>R101</td>
-      <td>40.1</td>
-      <td>33</td>
-      <td>45.1</td>
-      <td><a href="https://dl.fbaipublicfiles.com/detr/detr-r101-panoptic-40021d53.pth">download</a></td>
-      <td>237Mb</td>
-    </tr>
-  </tbody>
-</table>
+Two further scripts wrap `detr.train.run` directly with the full argparse-from-dataclass surface for finer control:
 
-Checkout our [panoptic colab](https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/DETR_panoptic.ipynb)
-to see how to use and visualize DETR's panoptic segmentation prediction.
+- `train_objdet.py` — full-control object-detection training; every field of `parameters.{Train,Model,Loss,Data,Augmentation,Run}` becomes a CLI flag (e.g. `--lr`, `--epochs`, `--num_queries`, `--scales 480 512 ...`).
+- `train_insseg.py` — train the segmentation head on top of a frozen detector. Requires `--masks` and a `--frozen_weights` checkpoint.
 
-# Notebooks
+## Programmatic API
 
-We provide a few notebooks in colab to help you get a grasp on DETR:
-* [DETR's hands on Colab Notebook](https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/detr_attention.ipynb): Shows how to load a model from hub, generate predictions, then visualize the attention of the model (similar to the figures of the paper)
-* [Standalone Colab Notebook](https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/detr_demo.ipynb): In this notebook, we demonstrate how to implement a simplified version of DETR from the grounds up in 50 lines of Python, then visualize the predictions. It is a good starting point if you want to gain better understanding the architecture and poke around before diving in the codebase.
-* [Panoptic Colab Notebook](https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/DETR_panoptic.ipynb): Demonstrates how to use DETR for panoptic segmentation and plot the predictions.
+```python
+from detr import Bundle, parameters
+from detr.aux import load_dataset
+from detr.train import augmentation_transforms, run
 
+bundle = Bundle.load_from_file("detr-r50-e632da11.pth", device="cuda")
+train_loader = load_dataset("data/train.coco.json",
+                             bundle.transforms + augmentation_transforms(),
+                             shuffle=True, batch_size=4)
+val_loader   = load_dataset("data/valid.coco.json",
+                             bundle.transforms,
+                             shuffle=False, batch_size=4)
 
-# Usage - Object detection
-There are no extra compiled components in DETR and package dependencies are minimal,
-so the code is very simple to use. We provide instructions how to install dependencies via conda.
-First, clone the repository locally:
-```
-git clone https://github.com/facebookresearch/detr.git
-```
-Then, install PyTorch 1.5+ and torchvision 0.6+:
-```
-conda install -c pytorch pytorch torchvision
-```
-Install pycocotools (for evaluation on COCO) and scipy (for training):
-```
-conda install cython scipy
-pip install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
-```
-That's it, should be good to train and evaluate detection models.
-
-(optional) to work with panoptic install panopticapi:
-```
-pip install git+https://github.com/cocodataset/panopticapi.git
+bundle = run(bundle, train_loader, val_loader,
+             params=parameters.Train(epochs=10))
+bundle.export("checkpoints/finetuned")          # writes .pth and .csv
 ```
 
-## Data preparation
+## Tests
 
-Download and extract COCO 2017 train and val images with annotations from
-[http://cocodataset.org](http://cocodataset.org/#download).
-We expect the directory structure to be the following:
-```
-path/to/coco/
-  annotations/  # annotation json files
-  train2017/    # train images
-  val2017/      # val images
+```bash
+pytest test/
 ```
 
-## Training
-To train baseline DETR on a single node with 8 gpus for 300 epochs run:
-```
-python -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --coco_path /path/to/coco 
-```
-A single epoch takes 28 minutes, so 300 epoch training
-takes around 6 days on a single machine with 8 V100 cards.
-To ease reproduction of our results we provide
-[results and training logs](https://gist.github.com/szagoruyko/b4c3b2c3627294fc369b899987385a3f)
-for 150 epoch schedule (3 days on a single machine), achieving 39.5/60.3 AP/AP50.
+Covers model construction (CPU + TorchScript), the COCO transform pipeline, dataset loading, a one-epoch training step, and COCO evaluation on a synthetic mini-dataset.
 
-We train DETR with AdamW setting learning rate in the transformer to 1e-4 and 1e-5 in the backbone.
-Horizontal flips, scales and crops are used for augmentation.
-Images are rescaled to have min size 800 and max size 1333.
-The transformer is trained with dropout of 0.1, and the whole model is trained with grad clip of 0.1.
+## Repository layout
 
-
-## Evaluation
-To evaluate DETR R50 on COCO val5k with a single GPU run:
 ```
-python main.py --batch_size 2 --no_aux_loss --eval --resume https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth --coco_path /path/to/coco
-```
-We provide results for all DETR detection models in this
-[gist](https://gist.github.com/szagoruyko/9c9ebb8455610958f7deaa27845d7918).
-Note that numbers vary depending on batch size (number of images) per GPU.
-Non-DC5 models were trained with batch size 2, and DC5 with 1,
-so DC5 models show a significant drop in AP if evaluated with more
-than 1 image per GPU.
-
-## Multinode training
-Distributed training is available via Slurm and [submitit](https://github.com/facebookincubator/submitit):
-```
-pip install submitit
-```
-Train baseline DETR-6-6 model on 4 nodes for 300 epochs:
-```
-python run_with_submitit.py --timeout 3000 --coco_path /path/to/coco
+src/detr/
+├── aux.py             # load_dataset (composes transforms + DataLoader)
+├── coco_eval.py       # pycocotools wrapper
+├── dataset.py         # CocoDetection + tv_tensor wrapping
+├── evaluate.py        # validation loop
+├── logger.py          # SmoothedValue / MetricLogger
+├── misc.py            # NestedTensor + collate_fn
+├── model.py           # Bundle (build / load / export) + default_transforms
+├── parameters.py      # Train / Model / Loss / Data / Run / Augmentation dataclasses
+├── train.py           # train_one_epoch + run + augmentation_transforms
+├── transforms.py      # RandomResize / RandomSizeCrop / FinalizeTargets / make_coco_transforms
+└── models/            # the DETR architecture (backbone, transformer, matcher, ...)
+train_detr.py          # high-level fine-tuning script
+train_objdet.py        # full-control detection script
+train_insseg.py        # segmentation head training
+test/                  # pytest suite
 ```
 
-# Usage - Segmentation
+## License
 
-We show that it is relatively straightforward to extend DETR to predict segmentation masks. We mainly demonstrate strong panoptic segmentation results.
-
-## Data preparation
-
-For panoptic segmentation, you need the panoptic annotations additionally to the coco dataset (see above for the coco dataset). You need to download and extract the [annotations](http://images.cocodataset.org/annotations/panoptic_annotations_trainval2017.zip).
-We expect the directory structure to be the following:
-```
-path/to/coco_panoptic/
-  annotations/  # annotation json files
-  panoptic_train2017/    # train panoptic annotations
-  panoptic_val2017/      # val panoptic annotations
-```
-
-## Training
-
-We recommend training segmentation in two stages: first train DETR to detect all the boxes, and then train the segmentation head.
-For panoptic segmentation, DETR must learn to detect boxes for both stuff and things classes. You can train it on a single node with 8 gpus for 300 epochs with:
-```
-python -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --coco_path /path/to/coco  --coco_panoptic_path /path/to/coco_panoptic --dataset_file coco_panoptic --output_dir /output/path/box_model
-```
-For instance segmentation, you can simply train a normal box model (or used a pre-trained one we provide).
-
-Once you have a box model checkpoint, you need to freeze it, and train the segmentation head in isolation.
-For panoptic segmentation you can train on a single node with 8 gpus for 25 epochs:
-```
-python -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --masks --epochs 25 --lr_drop 15 --coco_path /path/to/coco  --coco_panoptic_path /path/to/coco_panoptic  --dataset_file coco_panoptic --frozen_weights /output/path/box_model/checkpoint.pth --output_dir /output/path/segm_model
-```
-For instance segmentation only, simply remove the `dataset_file` and `coco_panoptic_path` arguments from the above command line.
-
-# License
-DETR is released under the Apache 2.0 license. Please see the [LICENSE](LICENSE) file for more information.
-
-# Contributing
-We actively welcome your pull requests! Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) for more info.
+Apache 2.0 — see `LICENSE`.

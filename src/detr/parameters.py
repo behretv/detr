@@ -199,18 +199,8 @@ class Loss:
 
 @dataclass
 class Data:
-    dataset_file: str = field(
-        default="coco", metadata={"help": "Name of the dataset file to use"}
-    )
     coco_path: str | None = field(
         default=None, metadata={"help": "Path to COCO dataset directory"}
-    )
-    coco_panoptic_path: str | None = field(
-        default=None, metadata={"help": "Path to COCO panoptic dataset directory"}
-    )
-    remove_difficult: bool = field(
-        default=False,
-        metadata={"help": "Whether to remove difficult objects from training"},
     )
 
     @classmethod
