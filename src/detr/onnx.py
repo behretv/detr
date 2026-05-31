@@ -29,7 +29,7 @@ def export(
     dynamic_axes: dict | None = None,
     input_names: list[str] | None = None,
     output_names: list[str] | None = None,
-    opset_version: int = 12,
+    opset_version: int = 18,
 ) -> io.BytesIO:
     """Export *model* to ONNX and return the serialised bytes.
 
@@ -56,6 +56,7 @@ def export(
             dynamic_axes=dynamic_axes,
             input_names=input_names,
             output_names=output_names,
+            external_data=False,
         )
         data = Path(tmp.name).read_bytes()
     if output_path is not None:

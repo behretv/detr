@@ -31,6 +31,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:`isinstance\\(treespec, LeafSpec\\)` is deprecated:FutureWarning",
+]
 
 [tool.flake8]
 max-line-length = 120
