@@ -32,9 +32,6 @@ def main(args):
     data_params = parameters.Data.from_args(args)
     run_params = parameters.Run.from_args(args)
 
-    print(f"git:\n  {utils.get_sha()}\n")
-    print(train_params, model_params, loss_params, data_params, run_params)
-
     device = torch.device(run_params.device)
 
     # fix the seed for reproducibility

@@ -1,169 +1,103 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """
 Transforms and data augmentation for both image + bbox.
+
+Built on top of :mod:`torchvision.transforms.v2`, which natively syncs
+bounding boxes and masks with image-level geometric transforms.  The public
+classes preserve the legacy ``(image, target_dict) -> (image, target_dict)``
+calling convention used throughout the project.
 """
 
+from __future__ import annotations
+
 import random
+from typing import Sequence
 
 import torch
-import torchvision.transforms as T
-import torchvision.transforms.functional as F
-from torchvision.ops.misc import interpolate
+import torchvision.transforms.v2 as v2
+import torchvision.transforms.v2.functional as F
+from PIL import Image
+from torchvision import tv_tensors
 
 from detr.misc import box_xyxy_to_cxcywh
 
 
-def crop(image, target, region):
-    cropped_image = F.crop(image, *region)
-
-    target = target.copy()
-    i, j, h, w = region
-
-    # should we do something wrt the original size?
-    target["size"] = torch.tensor([h, w])
-
-    fields = ["labels", "area", "iscrowd"]
-
-    if "boxes" in target:
-        boxes = target["boxes"]
-        max_size = torch.as_tensor([w, h], dtype=torch.float32)
-        cropped_boxes = boxes - torch.as_tensor([j, i, j, i])
-        cropped_boxes = torch.min(cropped_boxes.reshape(-1, 2, 2), max_size)
-        cropped_boxes = cropped_boxes.clamp(min=0)
-        area = (cropped_boxes[:, 1, :] - cropped_boxes[:, 0, :]).prod(dim=1)
-        target["boxes"] = cropped_boxes.reshape(-1, 4)
-        target["area"] = area
-        fields.append("boxes")
-
-    if "masks" in target:
-        # FIXME should we update the area here if there are no boxes?
-        target["masks"] = target["masks"][:, i : i + h, j : j + w]
-        fields.append("masks")
-
-    # remove elements for which the boxes or masks that have zero area
-    if "boxes" in target or "masks" in target:
-        # favor boxes selection when defining which elements to keep
-        # this is compatible with previous implementation
-        if "boxes" in target:
-            cropped_boxes = target["boxes"].reshape(-1, 2, 2)
-            keep = torch.all(cropped_boxes[:, 1, :] > cropped_boxes[:, 0, :], dim=1)
-        else:
-            keep = target["masks"].flatten(1).any(1)
-
-        for field in fields:
-            target[field] = target[field][keep]
-
-    return cropped_image, target
+# ---------------------------------------------------------------------------
+# tv_tensor helpers
+# ---------------------------------------------------------------------------
 
 
-def hflip(image, target):
-    flipped_image = F.hflip(image)
-
-    w, h = image.size
-
-    target = target.copy()
-    if "boxes" in target:
-        boxes = target["boxes"]
-        boxes = boxes[:, [2, 1, 0, 3]] * torch.as_tensor(
-            [-1, 1, -1, 1]
-        ) + torch.as_tensor([w, 0, w, 0])
-        target["boxes"] = boxes
-
-    if "masks" in target:
-        target["masks"] = target["masks"].flip(-1)
-
-    return flipped_image, target
+def _canvas_size(image) -> tuple[int, int]:
+    """Return (H, W) for a PIL image or CHW tensor."""
+    if isinstance(image, Image.Image):
+        w, h = image.size
+        return h, w
+    return int(image.shape[-2]), int(image.shape[-1])
 
 
-def resize(image, target, size, max_size=None):
-    # size can be min_size (scalar) or (w, h) tuple
-
-    def get_size_with_aspect_ratio(image_size, size, max_size=None):
-        w, h = image_size
-        if max_size is not None:
-            min_original_size = float(min((w, h)))
-            max_original_size = float(max((w, h)))
-            if max_original_size / min_original_size * size > max_size:
-                size = int(round(max_size * min_original_size / max_original_size))
-
-        if (w <= h and w == size) or (h <= w and h == size):
-            return (h, w)
-
-        if w < h:
-            ow = size
-            oh = int(size * h / w)
-        else:
-            oh = size
-            ow = int(size * w / h)
-
-        return (oh, ow)
-
-    def get_size(image_size, size, max_size=None):
-        if isinstance(size, (list, tuple)):
-            return size[::-1]
-        else:
-            return get_size_with_aspect_ratio(image_size, size, max_size)
-
-    size = get_size(image.size, size, max_size)
-    rescaled_image = F.resize(image, size)
-
-    if target is None:
-        return rescaled_image, None
-
-    ratios = tuple(
-        float(s) / float(s_orig) for s, s_orig in zip(rescaled_image.size, image.size)
-    )
-    ratio_width, ratio_height = ratios
-
-    target = target.copy()
-    if "boxes" in target:
-        boxes = target["boxes"]
-        scaled_boxes = boxes * torch.as_tensor(
-            [ratio_width, ratio_height, ratio_width, ratio_height]
+def _wrap_target(target: dict, canvas_size: tuple[int, int]) -> dict:
+    """Wrap ``boxes`` / ``masks`` as v2 tv_tensors (no-op if already wrapped)."""
+    target = dict(target)
+    boxes = target.get("boxes")
+    if boxes is not None and not isinstance(boxes, tv_tensors.BoundingBoxes):
+        target["boxes"] = tv_tensors.BoundingBoxes(
+            boxes, format=tv_tensors.BoundingBoxFormat.XYXY, canvas_size=canvas_size
         )
-        target["boxes"] = scaled_boxes
-
-    if "area" in target:
-        area = target["area"]
-        scaled_area = area * (ratio_width * ratio_height)
-        target["area"] = scaled_area
-
-    h, w = size
-    target["size"] = torch.tensor([h, w])
-
-    if "masks" in target:
-        target["masks"] = (
-            interpolate(target["masks"][:, None].float(), size, mode="nearest")[:, 0]
-            > 0.5
-        )
-
-    return rescaled_image, target
+    masks = target.get("masks")
+    if masks is not None and not isinstance(masks, tv_tensors.Mask):
+        target["masks"] = tv_tensors.Mask(masks)
+    return target
 
 
-class RandomSizeCrop(object):
-    def __init__(self, min_size: int, max_size: int):
-        self.min_size = min_size
-        self.max_size = max_size
-
-    def __call__(self, img, target: dict):
-        w = random.randint(self.min_size, min(img.width, self.max_size))
-        h = random.randint(self.min_size, min(img.height, self.max_size))
-        region = T.RandomCrop.get_params(img, [h, w])
-        return crop(img, target, region)
+def _filter_instances(target: dict, keep: torch.Tensor) -> None:
+    """Drop instances for which *keep* is False across all per-instance fields."""
+    n = keep.shape[0]
+    for field in ("boxes", "labels", "area", "iscrowd", "masks", "keypoints"):
+        val = target.get(field)
+        if torch.is_tensor(val) and val.shape and val.shape[0] == n:
+            target[field] = val[keep]
 
 
-class RandomHorizontalFlip(object):
-    def __init__(self, p=0.5):
+# ---------------------------------------------------------------------------
+# Geometric transforms
+# ---------------------------------------------------------------------------
+
+
+class RandomHorizontalFlip:
+    def __init__(self, p: float = 0.5):
         self.p = p
 
-    def __call__(self, img, target):
-        if random.random() < self.p:
-            return hflip(img, target)
-        return img, target
+    def __call__(self, image, target):
+        if random.random() >= self.p:
+            return image, target
+        target = _wrap_target(target, _canvas_size(image))
+        image = F.horizontal_flip(image)
+        target["boxes"] = F.horizontal_flip(target["boxes"])
+        if "masks" in target:
+            target["masks"] = F.horizontal_flip(target["masks"])
+        return image, target
 
 
-class RandomResize(object):
-    def __init__(self, sizes, max_size=None):
+def _get_resized_size(
+    canvas_size: tuple[int, int], size: int, max_size: int | None
+) -> tuple[int, int]:
+    """Aspect-preserving short-side resize, optionally capped by *max_size*."""
+    h, w = canvas_size
+    if max_size is not None:
+        min_orig = float(min(h, w))
+        max_orig = float(max(h, w))
+        if max_orig / min_orig * size > max_size:
+            size = int(round(max_size * min_orig / max_orig))
+
+    if (w <= h and w == size) or (h <= w and h == size):
+        return h, w
+    if w < h:
+        return int(size * h / w), size
+    return size, int(size * w / h)
+
+
+class RandomResize:
+    def __init__(self, sizes: Sequence[int], max_size: int | None = None):
         if not isinstance(sizes, (list, tuple)):
             raise TypeError(
                 f"sizes must be a list or tuple, got {type(sizes).__name__}"
@@ -171,53 +105,105 @@ class RandomResize(object):
         self.sizes = sizes
         self.max_size = max_size
 
-    def __call__(self, img, target=None):
+    def __call__(self, image, target=None):
         size = random.choice(self.sizes)
-        return resize(img, target, size, self.max_size)
+        h0, w0 = _canvas_size(image)
+        new_h, new_w = _get_resized_size((h0, w0), size, self.max_size)
+        image = F.resize(image, [new_h, new_w])
+
+        if target is None:
+            return image, None
+
+        target = _wrap_target(target, (h0, w0))
+        target["boxes"] = F.resize(target["boxes"], [new_h, new_w])
+        if "masks" in target:
+            target["masks"] = F.resize(
+                target["masks"], [new_h, new_w], interpolation=F.InterpolationMode.NEAREST
+            )
+        if "area" in target:
+            target["area"] = target["area"] * (new_h / h0) * (new_w / w0)
+        target["size"] = torch.tensor([new_h, new_w])
+        return image, target
 
 
-class RandomSelect(object):
-    """
-    Randomly selects between transforms1 and transforms2,
-    with probability p for transforms1 and (1 - p) for transforms2
-    """
+class RandomSizeCrop:
+    def __init__(self, min_size: int, max_size: int):
+        self.min_size = min_size
+        self.max_size = max_size
 
-    def __init__(self, transforms1, transforms2, p=0.5):
+    def __call__(self, image, target):
+        h0, w0 = _canvas_size(image)
+        w = random.randint(self.min_size, min(w0, self.max_size))
+        h = random.randint(self.min_size, min(h0, self.max_size))
+        i, j, ch, cw = v2.RandomCrop.get_params(image, [h, w])
+
+        target = _wrap_target(target, (h0, w0))
+        image = F.crop(image, i, j, ch, cw)
+        target["boxes"] = F.crop(target["boxes"], i, j, ch, cw)
+        if "masks" in target:
+            target["masks"] = F.crop(target["masks"], i, j, ch, cw)
+        target["size"] = torch.tensor([ch, cw])
+
+        boxes = target["boxes"]
+        keep = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
+        _filter_instances(target, keep)
+        if "area" in target and "boxes" in target:
+            b = target["boxes"]
+            target["area"] = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+        return image, target
+
+
+# ---------------------------------------------------------------------------
+# Compositional / image-level transforms
+# ---------------------------------------------------------------------------
+
+
+class RandomSelect:
+    """Randomly applies *transforms1* with probability *p*, else *transforms2*."""
+
+    def __init__(self, transforms1, transforms2, p: float = 0.5):
         self.transforms1 = transforms1
         self.transforms2 = transforms2
         self.p = p
 
-    def __call__(self, img, target):
-        if random.random() < self.p:
-            return self.transforms1(img, target)
-        return self.transforms2(img, target)
+    def __call__(self, image, target):
+        chosen = self.transforms1 if random.random() < self.p else self.transforms2
+        return chosen(image, target)
 
 
-class ToTensor(object):
-    def __call__(self, img, target):
-        return F.to_tensor(img), target
+class ToTensor:
+    def __init__(self):
+        self._t = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
+
+    def __call__(self, image, target):
+        return self._t(image), target
 
 
-class Normalize(object):
+class Normalize:
+    """Normalize image and convert boxes to normalised cxcywh (DETR format)."""
+
     def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
+        self._n = v2.Normalize(mean=list(mean), std=list(std))
 
     def __call__(self, image, target=None):
-        image = F.normalize(image, mean=self.mean, std=self.std)
+        image = self._n(image)
         if target is None:
             return image, None
-        target = target.copy()
+        target = dict(target)
         h, w = image.shape[-2:]
         if "boxes" in target:
             boxes = target["boxes"]
+            if isinstance(boxes, tv_tensors.BoundingBoxes):
+                boxes = boxes.as_subclass(torch.Tensor)
             boxes = box_xyxy_to_cxcywh(boxes)
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
+        if "masks" in target and isinstance(target["masks"], tv_tensors.Mask):
+            target["masks"] = target["masks"].as_subclass(torch.Tensor)
         return image, target
 
 
-class Compose(object):
+class Compose:
     def __init__(self, transforms):
         self.transforms = transforms
 
@@ -226,21 +212,20 @@ class Compose(object):
             image, target = t(image, target)
         return image, target
 
-    def __repr__(self):
-        format_string = self.__class__.__name__ + "("
-        for t in self.transforms:
-            format_string += "\n"
-            format_string += f"    {t}"
-        format_string += "\n)"
-        return format_string
+    def __repr__(self) -> str:
+        body = "\n".join(f"    {t}" for t in self.transforms)
+        return f"{self.__class__.__name__}(\n{body}\n)"
 
 
-def make_coco_transforms(image_set):
+# ---------------------------------------------------------------------------
+# COCO transform pipelines
+# ---------------------------------------------------------------------------
 
+
+def make_coco_transforms(image_set: str) -> Compose:
     normalize = Compose(
         [ToTensor(), Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
     )
-
     scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
 
     if image_set == "train":
