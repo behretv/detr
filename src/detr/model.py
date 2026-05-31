@@ -10,6 +10,12 @@ import torch.nn as nn
 import torchvision.transforms.v2 as v2
 
 import detr.parameters as parameters
+from detr.transforms import NormalizeImage, ToTensor
+
+
+def default_transforms() -> list[v2.Transform]:
+    """Standard inference / base transforms: PIL → tensor → mean/std normalise."""
+    return [ToTensor(), NormalizeImage([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
 
 
 @dataclass
@@ -188,3 +194,19 @@ class Bundle:
             with_augmentation=checkpoint.get("with_augmentation", False),
             logs=logs,
         )
+
+
+def load_from_file(
+    file: Path | str,
+    device: str | None = None,
+    transforms: list[v2.Transform] | None = None,
+) -> Bundle:
+    """Module-level convenience wrapper around :meth:`Bundle.load_from_file`.
+
+    When *transforms* is omitted, the returned bundle is prepopulated with the
+    standard image-only base pipeline (:func:`default_transforms`), so callers
+    can simply append augmentation transforms on top.
+    """
+    if transforms is None:
+        transforms = default_transforms()
+    return Bundle.load_from_file(file, device=device, transforms=transforms)

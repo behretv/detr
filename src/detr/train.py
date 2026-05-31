@@ -15,7 +15,50 @@ from tqdm import tqdm
 from detr.evaluate import evaluate
 from detr.logger import MetricLogger, SmoothedValue
 from detr.model import Bundle
-from detr.parameters import Train
+from detr.parameters import Augmentation, Train
+from detr.transforms import (
+    Compose,
+    RandomHorizontalFlip,
+    RandomResize,
+    RandomSelect,
+    RandomSizeCrop,
+)
+
+# Public aliases — the external API treats ``Train`` as the generic
+# "training Parameter" container.
+Parameter = Train
+__all__ = [
+    "Augmentation",
+    "Parameter",
+    "augmentation_transforms",
+    "run",
+    "train_one_epoch",
+]
+
+
+def augmentation_transforms(params: Augmentation | None = None) -> list:
+    """Return the geometric augmentation transforms parametrised by *params*.
+
+    The returned list is meant to be appended to a base
+    ``[ToTensor, NormalizeImage]`` pipeline.  Box format conversion is added
+    automatically downstream by :func:`detr.aux.load_dataset`.
+    """
+    if params is None:
+        params = Augmentation()
+    return [
+        RandomHorizontalFlip(p=params.hflip_prob),
+        RandomSelect(
+            RandomResize(params.scales, max_size=params.max_size),
+            Compose(
+                [
+                    RandomResize(params.pre_crop_scales),
+                    RandomSizeCrop(params.crop_min_size, params.crop_max_size),
+                    RandomResize(params.scales, max_size=params.max_size),
+                ]
+            ),
+            p=1.0 - params.crop_branch_prob,
+        ),
+    ]
 
 
 def train_one_epoch(
@@ -115,6 +158,12 @@ def run(
     output_dir = Path(output_dir) if output_dir else None
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
+
+    if base_ds is None:
+        dataset = getattr(val_loader, "dataset", None)
+        coco_api = getattr(dataset, "coco_api", None)
+        if callable(coco_api):
+            base_ds = coco_api()
 
     device = torch.device(bundle.device)
 

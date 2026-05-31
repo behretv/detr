@@ -180,14 +180,29 @@ class ToTensor:
         return self._t(image), target
 
 
-class Normalize:
-    """Normalize image and convert boxes to normalised cxcywh (DETR format)."""
+class NormalizeImage:
+    """Image-only ``v2.Normalize`` wrapper that leaves the target dict untouched.
+
+    Geometric augmentations may safely be appended after this transform; box
+    coordinates remain in pixel-space xyxy until :class:`BoxToNormalizedCXCYWH`
+    converts them at the end of the pipeline.
+    """
 
     def __init__(self, mean, std):
         self._n = v2.Normalize(mean=list(mean), std=list(std))
 
     def __call__(self, image, target=None):
-        image = self._n(image)
+        return self._n(image), target
+
+
+class BoxToNormalizedCXCYWH:
+    """Final step of the DETR pipeline: convert boxes to normalised cxcywh.
+
+    The current canvas size is taken from the image tensor's spatial shape so
+    this transform is robust to any preceding geometric augmentation.
+    """
+
+    def __call__(self, image, target=None):
         if target is None:
             return image, None
         target = dict(target)
@@ -202,6 +217,23 @@ class Normalize:
         if "masks" in target and isinstance(target["masks"], tv_tensors.Mask):
             target["masks"] = target["masks"].as_subclass(torch.Tensor)
         return image, target
+
+
+class Normalize:
+    """Legacy fused transform: image normalisation + boxes → normalised cxcywh.
+
+    Preserved for backwards compatibility with ``make_coco_transforms``. New
+    code should use :class:`NormalizeImage` followed by
+    :class:`BoxToNormalizedCXCYWH`.
+    """
+
+    def __init__(self, mean, std):
+        self._image = NormalizeImage(mean, std)
+        self._boxes = BoxToNormalizedCXCYWH()
+
+    def __call__(self, image, target=None):
+        image, target = self._image(image, target)
+        return self._boxes(image, target)
 
 
 class Compose:
