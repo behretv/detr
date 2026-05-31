@@ -358,6 +358,5 @@ def test_evaluate_runs(model_bundle, coco_root, device):
         loader,
         ds.coco_api(),
         device,
-        output_dir="",
     )
     assert "loss" in stats

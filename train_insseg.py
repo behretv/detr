@@ -20,9 +20,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+import detr.misc as utils
 import detr.parameters as parameters
 import detr.train as train
-import detr.misc as utils
 from detr.dataset import CocoDetection
 from detr.evaluate import evaluate
 from detr.model import Bundle
@@ -110,7 +110,6 @@ def main(args):
             data_loader_val,
             base_ds,
             device,
-            str(output_dir) if output_dir else "",
         )
         return
 

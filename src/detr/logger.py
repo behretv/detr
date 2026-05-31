@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """Logging utilities: metric tracking and git-SHA reporting."""
+
 from __future__ import annotations
 
 import datetime

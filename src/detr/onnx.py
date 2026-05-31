@@ -7,6 +7,7 @@ installed.  Removing it has no effect on training or inference.
 from __future__ import annotations
 
 import io
+import tempfile
 from pathlib import Path
 
 import torch
@@ -43,20 +44,23 @@ def export(
         bytes are only returned in-memory.
     """
     model.eval()
-    onnx_io = io.BytesIO()
-    torch.onnx.export(
-        model,
-        inputs_list[0],
-        onnx_io,
-        do_constant_folding=do_constant_folding,
-        opset_version=opset_version,
-        dynamic_axes=dynamic_axes,
-        input_names=input_names,
-        output_names=output_names,
-    )
+    # torch.onnx.export deprecated writing to BytesIO objects, so we go
+    # through a temporary file and load the bytes back in-memory.
+    with tempfile.NamedTemporaryFile(suffix=".onnx") as tmp:
+        torch.onnx.export(
+            model,
+            inputs_list[0],
+            tmp.name,
+            do_constant_folding=do_constant_folding,
+            opset_version=opset_version,
+            dynamic_axes=dynamic_axes,
+            input_names=input_names,
+            output_names=output_names,
+        )
+        data = Path(tmp.name).read_bytes()
     if output_path is not None:
-        Path(output_path).write_bytes(onnx_io.getvalue())
-    return onnx_io
+        Path(output_path).write_bytes(data)
+    return io.BytesIO(data)
 
 
 def validate(
@@ -89,7 +93,12 @@ def validate(
 
     for i, element in enumerate(np_outputs):
         try:
-            torch.testing.assert_allclose(element, ort_outs[i], rtol=1e-03, atol=1e-05)
+            torch.testing.assert_close(
+                torch.as_tensor(ort_outs[i]),
+                torch.as_tensor(element),
+                rtol=1e-03,
+                atol=1e-05,
+            )
         except AssertionError as error:
             if tolerate_small_mismatch:
                 assert "(0.00%)" in str(error), str(error)

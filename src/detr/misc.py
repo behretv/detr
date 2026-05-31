@@ -9,10 +9,6 @@ import torch
 import torchvision
 from torch import Tensor
 
-from detr.logger import MetricLogger, SmoothedValue, get_sha
-
-__all__ = ["MetricLogger", "SmoothedValue", "get_sha"]
-
 
 def box_cxcywh_to_xyxy(x):
     x_c, y_c, w, h = x.unbind(-1)

@@ -13,9 +13,9 @@ import torch
 from tqdm import tqdm
 
 from detr.evaluate import evaluate
+from detr.logger import MetricLogger, SmoothedValue
 from detr.model import Bundle
 from detr.parameters import Train
-from detr.logger import MetricLogger, SmoothedValue
 
 
 def train_one_epoch(
@@ -164,7 +164,6 @@ def run(
             val_loader,
             base_ds,
             device,
-            str(output_dir) if output_dir else "",
         )
 
         log_entry = {

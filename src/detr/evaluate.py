@@ -9,9 +9,7 @@ from detr.logger import MetricLogger, SmoothedValue
 
 
 @torch.no_grad()
-def evaluate(
-    model, criterion, postprocessors, data_loader, base_ds, device, output_dir
-):
+def evaluate(model, criterion, postprocessors, data_loader, base_ds, device):
     model.eval()
     criterion.eval()
 
