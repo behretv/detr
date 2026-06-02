@@ -10,6 +10,11 @@ import torch.nn as nn
 import torchvision.transforms.v2 as v2
 
 import detr.parameters as parameters
+from detr.models.backbone import build_backbone
+from detr.models.detr import DETR, PostProcess, SetCriterion
+from detr.models.matcher import build_matcher
+from detr.models.segmentation import DETRsegm, PostProcessSegm
+from detr.models.transformer import build_transformer
 
 
 def default_transforms() -> list[v2.Transform]:
@@ -80,14 +85,12 @@ class Bundle:
         All parameter arguments default to their respective dataclass defaults
         when omitted.
         """
-        from detr.models import build  # local import to avoid circular deps
-
         model_params = model_params or parameters.Model()
         loss_params = loss_params or parameters.Loss()
         train_params = train_params or parameters.Train()
         run_params = run_params or parameters.Run()
 
-        model, criterion, postprocessors = build(
+        model, criterion, postprocessors = _model_factory(
             model_params, loss_params, train_params, run_params
         )
         return cls(
@@ -150,8 +153,6 @@ class Bundle:
             Transforms to attach to the bundle. Defaults to an empty list if
             not provided (they are not stored in the checkpoint).
         """
-        from detr.models import build  # local import to avoid circular deps
-
         file = Path(file).with_suffix(".pth")
         checkpoint = torch.load(file, map_location="cpu", weights_only=False)
 
@@ -170,7 +171,7 @@ class Bundle:
             checkpoint.get("train_params") or parameters.Train()
         )
 
-        model, criterion, postprocessors = build(
+        model, criterion, postprocessors = _model_factory(
             model_params, loss_params, train_params, run_params
         )
 
@@ -200,6 +201,66 @@ class Bundle:
             device=resolved_device,
             logs=logs,
         )
+
+
+def _model_factory(
+    model_params: parameters.Model,
+    loss_params: parameters.Loss,
+    train_params: parameters.Train,
+    run_params: parameters.Run,
+):
+    # the `num_classes` naming here is somewhat misleading.
+    # it indeed corresponds to `max_obj_id + 1`, where max_obj_id
+    # is the maximum id for a class in your dataset. For example,
+    # COCO has a max_obj_id of 90, so we pass `num_classes` to be 91.
+    # As another example, for a dataset that has a single class with id 1,
+    # you should pass `num_classes` to be 2 (max_obj_id + 1).
+    # For more details on this, check the following discussion
+    # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
+    num_classes = 91
+    device = torch.device(run_params.device)
+
+    backbone = build_backbone(model_params, train_params)
+    transformer = build_transformer(model_params)
+
+    model = DETR(
+        backbone,
+        transformer,
+        num_classes=num_classes,
+        num_queries=model_params.num_queries,
+        aux_loss=model_params.aux_loss,
+    )
+    if model_params.masks:
+        model = DETRsegm(model, freeze_detr=(model_params.frozen_weights is not None))
+    matcher = build_matcher(loss_params)
+    weight_dict = {"loss_ce": 1, "loss_bbox": loss_params.bbox_loss_coef}
+    weight_dict["loss_giou"] = loss_params.giou_loss_coef
+    if model_params.masks:
+        weight_dict["loss_mask"] = loss_params.mask_loss_coef
+        weight_dict["loss_dice"] = loss_params.dice_loss_coef
+    # TODO this is a hack
+    if model_params.aux_loss:
+        aux_weight_dict = {}
+        for i in range(model_params.dec_layers - 1):
+            aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
+        weight_dict.update(aux_weight_dict)
+
+    losses = ["labels", "boxes", "cardinality"]
+    if model_params.masks:
+        losses += ["masks"]
+    criterion = SetCriterion(
+        num_classes,
+        matcher=matcher,
+        weight_dict=weight_dict,
+        eos_coef=loss_params.eos_coef,
+        losses=losses,
+    )
+    criterion.to(device)
+    postprocessors = {"bbox": PostProcess()}
+    if model_params.masks:
+        postprocessors["segm"] = PostProcessSegm()
+
+    return model, criterion, postprocessors
 
 
 def load_from_file(

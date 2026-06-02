@@ -73,7 +73,7 @@ def _make_pil(h: int = 100, w: int = 100) -> Image.Image:
 
 def _small_model_params() -> parameters.Model:
     return parameters.Model(
-        backbone="resnet50",
+        backbone=parameters.BackboneType.RESNET50,
         enc_layers=1,
         dec_layers=1,
         dim_feedforward=64,

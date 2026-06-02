@@ -1,7 +1,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import torch
 from torch import Tensor, nn
+from torchvision.ops import box_convert
 
+from detr.misc import nested_tensor_from_tensor_list
 from detr.models.backbone import Backbone, Joiner
 from detr.models.detr import DETR
 from detr.models.matcher import HungarianMatcher
@@ -10,15 +12,16 @@ from detr.models.position_encoding import (
     PositionEmbeddingSine,
 )
 from detr.models.transformer import Transformer
-from torchvision.ops import box_convert
-
-from detr.misc import nested_tensor_from_tensor_list
+from detr.parameters import BackboneType
 
 
 def detr_resnet50(pretrained=False):
     hidden_dim = 256
     backbone = Backbone(
-        "resnet50", train_backbone=True, return_interm_layers=False, dilation=False
+        BackboneType.RESNET50,
+        train_backbone=True,
+        return_interm_layers=False,
+        dilation=False,
     )
     pos_enc = PositionEmbeddingSine(hidden_dim // 2, normalize=True)
     backbone_with_pos_enc = Joiner(backbone, pos_enc)
@@ -95,7 +98,7 @@ def test_position_encoding_script():
 
 
 def test_backbone_script():
-    backbone = Backbone("resnet50", True, False, False)
+    backbone = Backbone(BackboneType.RESNET50, True, False, False)
     torch.jit.script(backbone)  # noqa
 
 

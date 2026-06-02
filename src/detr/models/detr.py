@@ -8,17 +8,9 @@ import torch.nn.functional as F
 from torch import nn
 from torchvision.ops import box_convert, generalized_box_iou
 
-import detr.parameters as parameters
-from detr.misc import (
-    NestedTensor,
-    accuracy,
-    nested_tensor_from_tensor_list,
-)
+from detr.misc import NestedTensor, accuracy, nested_tensor_from_tensor_list
 
-from .backbone import build_backbone
-from .matcher import build_matcher
-from .segmentation import DETRsegm, PostProcessSegm, dice_loss, sigmoid_focal_loss
-from .transformer import build_transformer
+from .segmentation import dice_loss, sigmoid_focal_loss
 
 
 class DETR(nn.Module):
@@ -346,64 +338,3 @@ class MLP(nn.Module):
         for i, layer in enumerate(self.layers):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
-
-
-def build(
-    model_params: parameters.Model,
-    loss_params: parameters.Loss,
-    train_params: parameters.Train,
-    run_params: parameters.Run,
-):
-    # the `num_classes` naming here is somewhat misleading.
-    # it indeed corresponds to `max_obj_id + 1`, where max_obj_id
-    # is the maximum id for a class in your dataset. For example,
-    # COCO has a max_obj_id of 90, so we pass `num_classes` to be 91.
-    # As another example, for a dataset that has a single class with id 1,
-    # you should pass `num_classes` to be 2 (max_obj_id + 1).
-    # For more details on this, check the following discussion
-    # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
-    num_classes = 91
-    device = torch.device(run_params.device)
-
-    backbone = build_backbone(model_params, train_params)
-
-    transformer = build_transformer(model_params)
-
-    model = DETR(
-        backbone,
-        transformer,
-        num_classes=num_classes,
-        num_queries=model_params.num_queries,
-        aux_loss=model_params.aux_loss,
-    )
-    if model_params.masks:
-        model = DETRsegm(model, freeze_detr=(model_params.frozen_weights is not None))
-    matcher = build_matcher(loss_params)
-    weight_dict = {"loss_ce": 1, "loss_bbox": loss_params.bbox_loss_coef}
-    weight_dict["loss_giou"] = loss_params.giou_loss_coef
-    if model_params.masks:
-        weight_dict["loss_mask"] = loss_params.mask_loss_coef
-        weight_dict["loss_dice"] = loss_params.dice_loss_coef
-    # TODO this is a hack
-    if model_params.aux_loss:
-        aux_weight_dict = {}
-        for i in range(model_params.dec_layers - 1):
-            aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
-        weight_dict.update(aux_weight_dict)
-
-    losses = ["labels", "boxes", "cardinality"]
-    if model_params.masks:
-        losses += ["masks"]
-    criterion = SetCriterion(
-        num_classes,
-        matcher=matcher,
-        weight_dict=weight_dict,
-        eos_coef=loss_params.eos_coef,
-        losses=losses,
-    )
-    criterion.to(device)
-    postprocessors = {"bbox": PostProcess()}
-    if model_params.masks:
-        postprocessors["segm"] = PostProcessSegm()
-
-    return model, criterion, postprocessors

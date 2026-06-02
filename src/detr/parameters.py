@@ -1,9 +1,24 @@
+"""
+Created on 2026-06-02
+Copyright (c) 2026 Munich University of Applied Sciences
+"""
+
 from __future__ import annotations
 
 import argparse
 import types as _types
 from dataclasses import MISSING, dataclass, field, fields
+from enum import Enum
 from typing import Union, get_args, get_origin, get_type_hints
+
+
+class BackboneType(Enum):
+    """Model subtypes for easier import export."""
+
+    RESNET50 = "resnet50"
+    RESNET50_DC5 = "resnet50_dc5"
+    RESNET101 = "resnet101"
+    RESNET101_DC5 = "resnet101_dc5"
 
 
 def _default_value(f):
@@ -96,8 +111,8 @@ class Train:
 
 @dataclass
 class Model:
-    backbone: str = field(
-        default="resnet50",
+    backbone: BackboneType = field(
+        default=BackboneType.RESNET50,
         metadata={"help": "Name of the convolutional backbone to use"},
     )
     dilation: bool = field(
@@ -242,7 +257,17 @@ class Augmentation:
     )
     scales: list[int] = field(
         default_factory=lambda: [
-            480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800,
+            480,
+            512,
+            544,
+            576,
+            608,
+            640,
+            672,
+            704,
+            736,
+            768,
+            800,
         ],
         metadata={"help": "Candidate short-side sizes for the final random resize"},
     )

@@ -57,18 +57,19 @@ class Backbone(BackboneBase):
 
     def __init__(
         self,
-        name: str,
+        name: parameters.BackboneType,
         train_backbone: bool,
         return_interm_layers: bool,
         dilation: bool,
     ):
-        weights = torchvision.models.get_model_weights(name).DEFAULT
-        backbone = getattr(torchvision.models, name)(
+        name_str = name.value
+        weights = torchvision.models.get_model_weights(name_str).DEFAULT
+        backbone = getattr(torchvision.models, name_str)(
             replace_stride_with_dilation=[False, False, dilation],
             weights=weights,
             norm_layer=FrozenBatchNorm2d,
         )
-        num_channels = 512 if name in ("resnet18", "resnet34") else 2048
+        num_channels = 512 if name_str in ("resnet18", "resnet34") else 2048
         super().__init__(backbone, train_backbone, num_channels, return_interm_layers)
 
 
