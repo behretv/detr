@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from loguru import logger
 from torch.utils.data import DataLoader
 
 import detr.misc as utils
@@ -41,12 +42,12 @@ def main(args):
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    bundle = Bundle.load_from_file(run_params.base_model, device=run_params.device)
+    bundle = Bundle.load_from_file(run_params.model, device=run_params.device)
 
     n_parameters = sum(
         p.numel() for p in bundle.ai_model.parameters() if p.requires_grad
     )
-    print("number of params:", n_parameters)
+    logger.info(f"Number of params: {n_parameters}")
 
     dataset_train = CocoDetection.build("train", data_params, model_params, aug_params)
     dataset_val = CocoDetection.build("val", data_params, model_params, aug_params)

@@ -68,6 +68,9 @@ class Bundle:
     )
     logs: list[dict[str, Any]] = field(default_factory=list)
 
+    def __post_init__(self):
+        self.name = self.name or f"detr_{self.model_params.backbone.value}"
+
     @classmethod
     def build(
         cls,

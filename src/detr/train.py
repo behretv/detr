@@ -11,6 +11,7 @@ from pathlib import Path
 
 import torch
 import torchvision.transforms.v2 as v2
+from loguru import logger
 from tqdm import tqdm
 
 from detr.evaluate import evaluate
@@ -216,6 +217,6 @@ def run(
                 f.write(json.dumps(log_entry) + "\n")
 
     elapsed = str(datetime.timedelta(seconds=int(time.time() - start_time)))
-    print(f"Training time {elapsed}")
+    logger.info(f"Training time {elapsed}")
 
     return result

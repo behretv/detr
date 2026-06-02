@@ -210,7 +210,7 @@ def test_dataset_boxes_normalised(coco_root):
 
 def test_build_dataset(coco_root):
     ds = CocoDetection.build(
-        "train", parameters.Data(coco_path=str(coco_root)), parameters.Model()
+        "train", parameters.Data(dataset=str(coco_root)), parameters.Model()
     )
     assert len(ds) > 0
 
@@ -218,7 +218,7 @@ def test_build_dataset(coco_root):
 def test_build_dataset_missing_path_raises():
     with pytest.raises(FileNotFoundError):
         CocoDetection.build(
-            "train", parameters.Data(coco_path="/nonexistent/path"), parameters.Model()
+            "train", parameters.Data(dataset="/nonexistent/path"), parameters.Model()
         )
 
 

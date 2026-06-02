@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from loguru import logger
 from torch.utils.data import DataLoader
 
 import detr.misc as utils
@@ -48,7 +49,11 @@ def main(args):
     if not model_params.masks:
         raise ValueError("--masks must be set for segmentation training")
 
-    print(train_params, model_params, loss_params, data_params, run_params)
+    logger.debug(f"Train params: {train_params}")
+    logger.debug(f"Model params: {model_params}")
+    logger.debug(f"Loss params: {loss_params}")
+    logger.debug(f"Data params: {data_params}")
+    logger.debug(f"Run params: {run_params}")
 
     device = torch.device(run_params.device)
 
@@ -57,7 +62,7 @@ def main(args):
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    bundle = Bundle.load_from_file(run_params.base_model, device=run_params.device)
+    bundle = Bundle.load_from_file(run_params.model, device=run_params.device)
 
     # Load pretrained detector weights into the DETR sub-module (frozen backbone + box head)
     if model_params.frozen_weights is not None:
@@ -70,7 +75,7 @@ def main(args):
     n_parameters = sum(
         p.numel() for p in bundle.ai_model.parameters() if p.requires_grad
     )
-    print("number of params:", n_parameters)
+    logger.info(f"Number of params: {n_parameters}")
 
     dataset_train = CocoDetection.build("train", data_params, model_params)
     dataset_val = CocoDetection.build("val", data_params, model_params)

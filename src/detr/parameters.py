@@ -214,7 +214,7 @@ class Loss:
 
 @dataclass
 class Data:
-    coco_path: str | None = field(
+    dataset: str | None = field(
         default=None, metadata={"help": "Path to COCO dataset directory"}
     )
 
@@ -231,10 +231,10 @@ class Run:
     device: str = field(
         default="cuda", metadata={"help": "Device to run on (cuda or cpu)"}
     )
-    base_model: str = field(
+    model: str = field(
         default="",
         metadata={
-            "help": "Path to the base model checkpoint to load (required)",
+            "help": "Path to the model checkpoint to load (required)",
             "required": True,
         },
     )

@@ -117,27 +117,3 @@ pytest test/
 
 Covers model construction (CPU + TorchScript), the COCO transform pipeline, dataset loading, a one-epoch training step, and COCO evaluation on a synthetic mini-dataset.
 
-## Repository layout
-
-```
-src/detr/
-├── aux.py             # load_dataset (composes transforms + DataLoader)
-├── coco_eval.py       # pycocotools wrapper
-├── dataset.py         # CocoDetection + tv_tensor wrapping
-├── evaluate.py        # validation loop
-├── logger.py          # SmoothedValue / MetricLogger
-├── misc.py            # NestedTensor + collate_fn
-├── model.py           # Bundle (build / load / export) + default_transforms
-├── parameters.py      # Train / Model / Loss / Data / Run / Augmentation dataclasses
-├── train.py           # train_one_epoch + run + augmentation_transforms
-├── transforms.py      # RandomResize / RandomSizeCrop / FinalizeTargets / make_coco_transforms
-└── models/            # the DETR architecture (backbone, transformer, matcher, ...)
-train_detr.py          # high-level fine-tuning script
-train_objdet.py        # full-control detection script
-train_insseg.py        # segmentation head training
-test/                  # pytest suite
-```
-
-## License
-
-Apache 2.0 — see `LICENSE`.
