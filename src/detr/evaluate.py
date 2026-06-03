@@ -4,7 +4,7 @@
 import torch
 from tqdm import tqdm
 
-from detr.coco_eval import CocoEvaluator
+from detr.coco import CocoEvaluator
 from detr.logger import MetricLogger, SmoothedValue
 
 

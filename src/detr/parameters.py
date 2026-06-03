@@ -213,17 +213,6 @@ class Loss:
 
 
 @dataclass
-class Data:
-    dataset: str | None = field(
-        default=None, metadata={"help": "Path to COCO dataset directory"}
-    )
-
-    @classmethod
-    def from_args(cls, args: argparse.Namespace) -> Data:
-        return cls(**{f.name: getattr(args, f.name) for f in fields(cls)})
-
-
-@dataclass
 class Run:
     output_dir: str = field(
         default="", metadata={"help": "path where to save, empty for no saving"}
@@ -240,6 +229,9 @@ class Run:
     )
     eval: bool = field(
         default=False, metadata={"help": "Whether to run in evaluation mode only"}
+    )
+    dataset: str | None = field(
+        default=None, metadata={"help": "Path to COCO dataset directory"}
     )
 
     @classmethod

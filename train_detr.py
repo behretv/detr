@@ -11,7 +11,8 @@ from pathlib import Path
 
 from loguru import logger
 
-from detr import aux, model, train, parameters
+import detr
+from detr import aux, model, parameters, train
 
 
 def main(args: argparse.Namespace):
@@ -19,6 +20,7 @@ def main(args: argparse.Namespace):
     logger.info("Start training...")
     t_file = args.dataset / "train.coco.json"
     v_file = args.dataset / "valid.coco.json"
+    h_file = args.dataset / "holdout.coco.json"
 
     # Load transformations
     aug_params = parameters.Augmentation()
@@ -37,14 +39,27 @@ def main(args: argparse.Namespace):
         t_transforms += train.augmentation_transforms(aug_params)
 
     # Load dataset
-    t_loader = aux.load_dataset(t_file, t_transforms, shuffle=True, batch_size=args.batch_size)
-    v_loader = aux.load_dataset(v_file, model_data.transforms, shuffle=False, batch_size=args.batch_size)
+    t_loader = aux.load_dataset(
+        t_file, t_transforms, shuffle=True, batch_size=args.batch_size
+    )
+    v_loader = aux.load_dataset(
+        v_file, model_data.transforms, shuffle=False, batch_size=args.batch_size
+    )
 
-    new_model_data = train.run(model_data, t_loader, v_loader, params=parameters.Train(batch_size=args.batch_size))
+    new_model_data = train.run(
+        model_data,
+        t_loader,
+        v_loader,
+        params=parameters.Train(batch_size=args.batch_size),
+    )
 
     # Export model + logs
     if args.dir_output:
         new_model_data.export(args.dir_output / model_data.name)
+
+    outputs = detr.coco.inference(new_model_data, v_loader)
+    stats = detr.coco.run_eval(h_file, outputs)
+    logger.info(f"Validation metrics: {stats}")
 
 
 if __name__ == "__main__":

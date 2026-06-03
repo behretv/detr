@@ -6,11 +6,11 @@ import pytest
 import torch
 from PIL import Image
 
+import detr
 import detr.parameters as parameters
 from detr.dataset import CocoDetection
 from detr.evaluate import evaluate
 from detr.misc import collate_fn
-from detr.model import Bundle
 from detr.train import train_one_epoch
 from detr.transforms import make_coco_transforms
 
@@ -106,7 +106,7 @@ def device():
 @pytest.fixture(scope="session")
 def model_bundle(device):
     model_params = _small_model_params()
-    bundle = Bundle.build(
+    bundle = detr.model.factory(
         model_params=model_params,
         loss_params=parameters.Loss(),
         train_params=parameters.Train(),
@@ -210,7 +210,7 @@ def test_dataset_boxes_normalised(coco_root):
 
 def test_build_dataset(coco_root):
     ds = CocoDetection.build(
-        "train", parameters.Data(dataset=str(coco_root)), parameters.Model()
+        "train", parameters.Run(dataset=str(coco_root)), parameters.Model()
     )
     assert len(ds) > 0
 
@@ -218,7 +218,7 @@ def test_build_dataset(coco_root):
 def test_build_dataset_missing_path_raises():
     with pytest.raises(FileNotFoundError):
         CocoDetection.build(
-            "train", parameters.Data(dataset="/nonexistent/path"), parameters.Model()
+            "train", parameters.Run(dataset="/nonexistent/path"), parameters.Model()
         )
 
 

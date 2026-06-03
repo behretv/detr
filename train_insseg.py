@@ -34,7 +34,6 @@ def get_args_parser():
     parameters.add_args(parser, parameters.Train)
     parameters.add_args(parser, parameters.Model)
     parameters.add_args(parser, parameters.Loss)
-    parameters.add_args(parser, parameters.Data)
     parameters.add_args(parser, parameters.Run)
     return parser
 
@@ -43,7 +42,6 @@ def main(args):
     train_params = parameters.Train.from_args(args)
     model_params = parameters.Model.from_args(args)
     loss_params = parameters.Loss.from_args(args)
-    data_params = parameters.Data.from_args(args)
     run_params = parameters.Run.from_args(args)
 
     if not model_params.masks:
@@ -52,7 +50,6 @@ def main(args):
     logger.debug(f"Train params: {train_params}")
     logger.debug(f"Model params: {model_params}")
     logger.debug(f"Loss params: {loss_params}")
-    logger.debug(f"Data params: {data_params}")
     logger.debug(f"Run params: {run_params}")
 
     device = torch.device(run_params.device)
@@ -77,8 +74,8 @@ def main(args):
     )
     logger.info(f"Number of params: {n_parameters}")
 
-    dataset_train = CocoDetection.build("train", data_params, model_params)
-    dataset_val = CocoDetection.build("val", data_params, model_params)
+    dataset_train = CocoDetection.build("train", run_params, model_params)
+    dataset_val = CocoDetection.build("val", run_params, model_params)
 
     sampler_train = torch.utils.data.RandomSampler(dataset_train)
     sampler_val = torch.utils.data.SequentialSampler(dataset_val)

@@ -73,3 +73,10 @@ def load_dataset(
         collate_fn=collate_fn,
         num_workers=num_workers,
     )
+
+def to_device(images: list[torch.Tensor], targets: list[dict], device: str):
+    """Move images and targets to device."""
+    keys = ["boxes", "labels"]
+    images = [img.to(device) for img in images]
+    targets = [{k: t[k].to(device) for k in keys} for t in targets]
+    return images, targets

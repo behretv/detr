@@ -14,6 +14,7 @@ import torchvision.transforms.v2 as v2
 from loguru import logger
 from tqdm import tqdm
 
+from detr import coco
 from detr.evaluate import evaluate
 from detr.logger import MetricLogger, SmoothedValue
 from detr.model import Bundle
@@ -155,21 +156,21 @@ def run(
     device = torch.device(bundle.device)
 
     # Work on a copy so the caller's bundle is not mutated
-    result = copy.copy(bundle)
-    result.logs = list(bundle.logs)
+    new_model = copy.copy(bundle)
+    new_model.logs = list(bundle.logs)
 
     param_dicts = [
         {
             "params": [
                 p
-                for n, p in result.ai_model.named_parameters()
+                for n, p in new_model.ai_model.named_parameters()
                 if "backbone" not in n and p.requires_grad
             ]
         },
         {
             "params": [
                 p
-                for n, p in result.ai_model.named_parameters()
+                for n, p in new_model.ai_model.named_parameters()
                 if "backbone" in n and p.requires_grad
             ],
             "lr": params.lr_backbone,
@@ -183,8 +184,8 @@ def run(
     start_time = time.time()
     for epoch in range(params.epochs):
         train_stats = train_one_epoch(
-            result.ai_model,
-            result.criterion,
+            new_model.ai_model,
+            new_model.criterion,
             train_loader,
             optimizer,
             device,
@@ -194,29 +195,23 @@ def run(
         lr_scheduler.step()
 
         test_stats = evaluate(
-            result.ai_model,
-            result.criterion,
-            result.postprocessors,
+            new_model.ai_model,
+            new_model.criterion,
+            new_model.postprocessors,
             val_loader,
             base_ds,
             device,
         )
+
 
         log_entry = {
             "epoch": epoch,
             **{f"train_{k}": v for k, v in train_stats.items()},
             **{f"val_{k}": v for k, v in test_stats.items()},
         }
-        result.logs.append(log_entry)
-
-        if output_dir is not None:
-            result.export(output_dir / "checkpoint")
-            if (epoch + 1) % params.lr_drop == 0 or (epoch + 1) % 100 == 0:
-                result.export(output_dir / f"checkpoint{epoch:04}")
-            with (output_dir / "log.txt").open("a") as f:
-                f.write(json.dumps(log_entry) + "\n")
+        new_model.logs.append(log_entry)
 
     elapsed = str(datetime.timedelta(seconds=int(time.time() - start_time)))
     logger.info(f"Training time {elapsed}")
 
-    return result
+    return new_model

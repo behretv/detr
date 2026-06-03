@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torchvision.transforms.v2 as v2
+from loguru import logger
 
 import detr.parameters as parameters
 from detr.models.backbone import build_backbone
@@ -59,10 +60,10 @@ class Bundle:
     model_params: parameters.Model
     loss_params: parameters.Loss
     train_params: parameters.Train
-    name: str
-    source: str
-    transforms: list[v2.Transform]
-    cats: dict[int, str]
+    name: str = ""
+    source: str = ""
+    transforms: list[v2.Transform] = field(default_factory=list)
+    cats: dict[int, str] = field(default_factory=dict)
     device: str = field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -70,47 +71,6 @@ class Bundle:
 
     def __post_init__(self):
         self.name = self.name or f"detr_{self.model_params.backbone.value}"
-
-    @classmethod
-    def build(
-        cls,
-        model_params: parameters.Model | None = None,
-        loss_params: parameters.Loss | None = None,
-        train_params: parameters.Train | None = None,
-        run_params: parameters.Run | None = None,
-        name: str = "",
-        source: str = "",
-        transforms: list[v2.Transform] | None = None,
-        cats: dict[int, str] | None = None,
-    ) -> Bundle:
-        """Construct a ``Bundle`` from parameter dataclasses.
-
-        All parameter arguments default to their respective dataclass defaults
-        when omitted.
-        """
-        model_params = model_params or parameters.Model()
-        loss_params = loss_params or parameters.Loss()
-        train_params = train_params or parameters.Train()
-        run_params = run_params or parameters.Run()
-
-        model, criterion, postprocessors = _model_factory(
-            model_params, loss_params, train_params, run_params
-        )
-        return cls(
-            ai_model=model,
-            criterion=criterion,
-            postprocessors=postprocessors,
-            model_params=model_params,
-            loss_params=loss_params,
-            train_params=train_params,
-            name=name,
-            source=source,
-            transforms=transforms or [],
-            cats=cats or {},
-            device=run_params.device,
-        )
-
-    def __post_init__(self) -> None:
         self.ai_model = self.ai_model.to(self.device)
         self.criterion = self.criterion.to(self.device)
 
@@ -136,82 +96,13 @@ class Bundle:
 
         pd.DataFrame(self.logs).to_csv(Path(file).with_suffix(".csv"), index=False)
 
-    @classmethod
-    def load_from_file(
-        cls,
-        file: Path | str,
-        device: str | None = None,
-        transforms: list[v2.Transform] | None = None,
-    ) -> Bundle:
-        """Reconstruct a ``Bundle`` from a ``.pth`` file written by ``export()``.
 
-        Parameters
-        ----------
-        file:
-            Path to the ``.pth`` file (the ``.pth`` suffix may be omitted).
-        device:
-            Override the device stored in the checkpoint. Defaults to the
-            value recorded at export time, or auto-detects CUDA when absent.
-        transforms:
-            Transforms to attach to the bundle. Defaults to an empty list if
-            not provided (they are not stored in the checkpoint).
-        """
-        file = Path(file).with_suffix(".pth")
-        checkpoint = torch.load(file, map_location="cpu", weights_only=False)
-
-        resolved_device = device or checkpoint.get(
-            "device", "cuda" if torch.cuda.is_available() else "cpu"
-        )
-        run_params = parameters.Run(device=resolved_device)
-
-        model_params: parameters.Model = (
-            checkpoint.get("model_params") or parameters.Model()
-        )
-        loss_params: parameters.Loss = (
-            checkpoint.get("loss_params") or parameters.Loss()
-        )
-        train_params: parameters.Train = (
-            checkpoint.get("train_params") or parameters.Train()
-        )
-
-        model, criterion, postprocessors = _model_factory(
-            model_params, loss_params, train_params, run_params
-        )
-
-        state_dict = checkpoint.get("state_dict") or checkpoint.get("model")
-        if state_dict is None:
-            raise KeyError(
-                f"Checkpoint {file} has neither 'state_dict' nor 'model' key"
-            )
-        model.load_state_dict(state_dict)
-
-        logs: list[dict[str, Any]] = []
-        csv_file = file.with_suffix(".csv")
-        if csv_file.exists():
-            logs = pd.read_csv(csv_file).to_dict(orient="records")
-
-        return cls(
-            ai_model=model,
-            criterion=criterion,
-            postprocessors=postprocessors,
-            model_params=model_params,
-            loss_params=loss_params,
-            train_params=train_params,
-            name=checkpoint.get("name", ""),
-            source=str(file),
-            transforms=transforms or [],
-            cats=checkpoint.get("cats", {}),
-            device=resolved_device,
-            logs=logs,
-        )
-
-
-def _model_factory(
+def factory(
     model_params: parameters.Model,
     loss_params: parameters.Loss,
     train_params: parameters.Train,
     run_params: parameters.Run,
-):
+) -> Bundle:
     # the `num_classes` naming here is somewhat misleading.
     # it indeed corresponds to `max_obj_id + 1`, where max_obj_id
     # is the maximum id for a class in your dataset. For example,
@@ -221,7 +112,6 @@ def _model_factory(
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
     num_classes = 91
-    device = torch.device(run_params.device)
 
     backbone = build_backbone(model_params, train_params)
     transformer = build_transformer(model_params)
@@ -258,25 +148,55 @@ def _model_factory(
         eos_coef=loss_params.eos_coef,
         losses=losses,
     )
-    criterion.to(device)
     postprocessors = {"bbox": PostProcess()}
     if model_params.masks:
         postprocessors["segm"] = PostProcessSegm()
 
-    return model, criterion, postprocessors
+    return Bundle(
+        ai_model=model,
+        criterion=criterion,
+        postprocessors=postprocessors,
+        model_params=model_params,
+        loss_params=loss_params,
+        train_params=train_params,
+        device=run_params.device,
+    )
 
 
 def load_from_file(
-    file: Path | str,
-    device: str | None = None,
+    file: Path,
+    device: str,
     transforms: list[v2.Transform] | None = None,
 ) -> Bundle:
-    """Module-level convenience wrapper around :meth:`Bundle.load_from_file`.
+    """Reconstruct a ``Bundle`` from a ``.pth`` file written by ``export()``.
 
-    When *transforms* is omitted, the returned bundle is prepopulated with the
-    standard image-only base pipeline (:func:`default_transforms`), so callers
-    can simply append augmentation transforms on top.
+    Parameters
+    ----------
+    file:
+        Path to the ``.pth`` file (the ``.pth`` suffix may be omitted).
+    device:
+        Override the device stored in the checkpoint. Defaults to the
+        value recorded at export time, or auto-detects CUDA when absent.
+    transforms:
+        Transforms to attach to the bundle. Defaults to an empty list if
+        not provided (they are not stored in the checkpoint).
     """
-    if transforms is None:
-        transforms = default_transforms()
-    return Bundle.load_from_file(file, device=device, transforms=transforms)
+    logger.info(f"Loading model from {file}")
+    model_data = torch.load(file, map_location=device, weights_only=False)
+
+    run_params = parameters.Run(device=device)
+
+    model_params: parameters.Model = model_data.get("model_params", parameters.Model())
+    loss_params: parameters.Loss = model_data.get("loss_params", parameters.Loss())
+    train_params: parameters.Train = model_data.get("train_params", parameters.Train())
+
+    bundle = factory(model_params, loss_params, train_params, run_params)
+
+    state_dict = model_data.get("state_dict") or model_data.get("model")
+    if state_dict is None:
+        raise KeyError(f"Checkpoint {file} has neither 'state_dict' nor 'model' key")
+    bundle.ai_model.load_state_dict(state_dict)
+
+    bundle.source = str(file)
+    bundle.transforms = model_data.get("transforms", default_transforms())
+    return bundle

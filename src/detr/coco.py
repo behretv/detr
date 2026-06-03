@@ -9,13 +9,19 @@ with the distributed-sync plumbing dropped and pycocotools' chatty
 import contextlib
 import copy
 import os
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pycocotools.mask as mask_util
 import torch
 from loguru import logger
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+from torchvision import ops
+from tqdm import tqdm
+
+from . import aux, model
 
 
 class CocoEvaluator(object):
@@ -203,3 +209,75 @@ def evaluate(self):
 #################################################################
 # end of straight copy from pycocotools, just removing the prints
 #################################################################
+
+
+def inference(model_data: model.Bundle, loader: torch.utils.data.DataLoader) -> list:
+    """Runs COCO evaluation and prints results to stdout.
+
+    Args:
+        model: A PyTorch instance segmentation model.
+        data_loader: A PyTorch data loader for the COCO dataset.
+    """
+    ai_model = model_data.ai_model
+    ai_model.to(model_data.device)
+    ai_model.eval()
+
+    results = []
+    for images, targets in tqdm(loader, desc="Evaluating model"):
+        images, target = aux.to_device(images, targets, model_data.device)
+        with torch.no_grad():
+            outputs = ai_model(images)
+
+        for out, target in zip(outputs, targets):
+            # Convert boxes using torch
+            out["boxes"] = ops.box_convert(out["boxes"], in_fmt="xyxy", out_fmt="xywh")
+
+            outputs = {k: v.detach().cpu() for k, v in out.items()}
+            for box, label, score in zip(out["boxes"], out["labels"], out["scores"]):
+                results.append(
+                    {
+                        "image_id": int(target["image_id"]),
+                        "category_id": int(label),
+                        "bbox": box.tolist(),
+                        "score": float(score),
+                    }
+                )
+
+    # Add name to results
+    df = pd.DataFrame(results)
+    df["name"] = df["category_id"].map(model_data.cats)
+    results = df.to_dict("records")
+    return results
+
+
+def run_eval(file_holdout: Path, results: list[dict]) -> dict:
+    """Runs COCO evaluation and prints results to stdout."""
+    coco_gt = COCO(file_holdout)
+
+    if len(results) == 0:
+        logger.warning("No results to evaluate.")
+        return {}
+
+    coco_dt = coco_gt.loadRes(results)
+    coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
+    coco_eval.params.useCats = 1
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+
+    # Convert stats to dict
+    coco_eval.stats = coco_eval.stats.round(3)
+    return {
+        "ap_mean": coco_eval.stats[0],
+        "ap_50": coco_eval.stats[1],
+        "ap_75": coco_eval.stats[2],
+        "ap_small": coco_eval.stats[3],
+        "ap_medium": coco_eval.stats[4],
+        "ap_large": coco_eval.stats[5],
+        "ar_max_1": coco_eval.stats[6],
+        "ar_max_10": coco_eval.stats[7],
+        "ar_max_100": coco_eval.stats[8],
+        "ar_small": coco_eval.stats[9],
+        "ar_medium": coco_eval.stats[10],
+        "ar_large": coco_eval.stats[11],
+    }

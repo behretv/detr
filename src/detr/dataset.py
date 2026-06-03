@@ -29,11 +29,11 @@ class CocoDetection(torchvision.datasets.CocoDetection):
     def build(
         cls,
         image_set: str,
-        data_params: parameters.Data,
+        run_params: parameters.Run,
         model_params: parameters.Model,
         aug_params: parameters.Augmentation | None = None,
     ) -> CocoDetection:
-        root = Path(data_params.dataset)
+        root = Path(run_params.dataset)
         if not root.exists():
             raise FileNotFoundError(f"provided COCO path {root} does not exist")
         PATHS = {
