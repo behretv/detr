@@ -213,33 +213,6 @@ class Loss:
 
 
 @dataclass
-class Run:
-    output_dir: str = field(
-        default="", metadata={"help": "path where to save, empty for no saving"}
-    )
-    device: str = field(
-        default="cuda", metadata={"help": "Device to run on (cuda or cpu)"}
-    )
-    model: str = field(
-        default="",
-        metadata={
-            "help": "Path to the model checkpoint to load (required)",
-            "required": True,
-        },
-    )
-    eval: bool = field(
-        default=False, metadata={"help": "Whether to run in evaluation mode only"}
-    )
-    dataset: str | None = field(
-        default=None, metadata={"help": "Path to COCO dataset directory"}
-    )
-
-    @classmethod
-    def from_args(cls, args: argparse.Namespace) -> Run:
-        return cls(**{f.name: getattr(args, f.name) for f in fields(cls)})
-
-
-@dataclass
 class Augmentation:
     """Parameters controlling the COCO data-augmentation pipeline."""
 

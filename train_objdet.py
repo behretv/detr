@@ -13,8 +13,8 @@ import detr.misc as utils
 import detr.parameters as parameters
 import detr.train as train
 from detr.dataset import CocoDetection
-from detr.evaluate import evaluate
-from detr.model import Bundle
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def get_args_parser():
@@ -23,7 +23,6 @@ def get_args_parser():
     parameters.add_args(parser, parameters.Model)
     parameters.add_args(parser, parameters.Loss)
     parameters.add_args(parser, parameters.Augmentation)
-    parameters.add_args(parser, parameters.Run)
     return parser
 
 
@@ -31,75 +30,80 @@ def main(args):
     train_params = parameters.Train.from_args(args)
     model_params = parameters.Model.from_args(args)
     aug_params = parameters.Augmentation.from_args(args)
-    run_params = parameters.Run.from_args(args)
-
-    device = torch.device(run_params.device)
 
     # fix the seed for reproducibility
     torch.manual_seed(train_params.seed)
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    bundle = detr.model.load_from_file(run_params.model, device=run_params.device)
+    bundle = detr.model.load_from_file(args.model, device=DEVICE)
+    logger.info(f"Training parameters: {bundle.train_params}")
 
-    n_parameters = sum(
-        p.numel() for p in bundle.ai_model.parameters() if p.requires_grad
+    t_file = Path(args.dataset) / "train.coco.json"
+    v_file = Path(args.dataset) / "valid.coco.json"
+    h_file = Path(args.dataset) / "holdout.coco.json"
+    t_dataset = CocoDetection.build(t_file, model_params, aug_params)
+    v_dataset = CocoDetection.build(v_file, model_params, aug_params)
+    h_dataset = CocoDetection.build(h_file, model_params, aug_params)
+
+    t_sampler = torch.utils.data.RandomSampler(t_dataset)
+    v_sampler = torch.utils.data.SequentialSampler(v_dataset)
+
+    t_batch_sampler = torch.utils.data.BatchSampler(
+        t_sampler, train_params.batch_size, drop_last=True
     )
-    logger.info(f"Number of params: {n_parameters}")
 
-    dataset_train = CocoDetection.build("train", run_params, model_params, aug_params)
-    dataset_val = CocoDetection.build("val", run_params, model_params, aug_params)
-
-    sampler_train = torch.utils.data.RandomSampler(dataset_train)
-    sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-
-    batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, train_params.batch_size, drop_last=True
-    )
-
-    data_loader_train = DataLoader(
-        dataset_train,
-        batch_sampler=batch_sampler_train,
+    t_loader = DataLoader(
+        t_dataset,
+        batch_sampler=t_batch_sampler,
         collate_fn=utils.collate_fn,
         num_workers=train_params.num_workers,
     )
-    data_loader_val = DataLoader(
-        dataset_val,
+    v_loader = DataLoader(
+        v_dataset,
         train_params.batch_size,
-        sampler=sampler_val,
+        sampler=v_sampler,
         drop_last=False,
         collate_fn=utils.collate_fn,
         num_workers=train_params.num_workers,
     )
 
-    base_ds = dataset_val.coco_api()
+    h_sampler = torch.utils.data.SequentialSampler(h_dataset)
+    h_loader = DataLoader(
+        h_dataset,
+        train_params.batch_size,
+        sampler=h_sampler,
+        drop_last=False,
+        collate_fn=utils.collate_fn,
+        num_workers=train_params.num_workers,
+    )
 
-    output_dir = Path(run_params.output_dir) if run_params.output_dir else None
-
+    bundle.set_device(DEVICE)
     bundle = train.run(
         bundle,
-        data_loader_train,
-        data_loader_val,
+        t_loader,
+        v_loader,
+        device=DEVICE,
         params=train_params,
-        output_dir=output_dir,
-        base_ds=base_ds,
+        output_dir=args.output_dir,
+        v_file=v_file,
     )
 
-    evaluate(
-        bundle.ai_model,
-        bundle.criterion,
-        bundle.postprocessors,
-        data_loader_val,
-        base_ds,
-        device,
-    )
+    outputs = detr.coco.inference(bundle, v_loader, device=DEVICE)
+    stats = detr.coco.run_eval(v_file, outputs)
+    logger.info(f"Validation metrics: {stats}")
+
+    outputs = detr.coco.inference(bundle, h_loader, device=DEVICE)
+    stats = detr.coco.run_eval(h_file, outputs)
+    logger.info(f"Holdout metrics: {stats}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "DETR training and evaluation script", parents=[get_args_parser()]
     )
+    parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--model", type=Path, required=True)
     args = parser.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)

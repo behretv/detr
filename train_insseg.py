@@ -25,7 +25,6 @@ import detr.misc as utils
 import detr.parameters as parameters
 import detr.train as train
 from detr.dataset import CocoDetection
-from detr.evaluate import evaluate
 from detr.model import Bundle
 
 
@@ -52,7 +51,6 @@ def main(args):
     logger.debug(f"Loss params: {loss_params}")
     logger.debug(f"Run params: {run_params}")
 
-    device = torch.device(run_params.device)
 
     # fix the seed for reproducibility
     torch.manual_seed(train_params.seed)
@@ -102,17 +100,6 @@ def main(args):
     base_ds = dataset_val.coco_api()
 
     output_dir = Path(run_params.output_dir) if run_params.output_dir else None
-
-    if run_params.eval:
-        evaluate(
-            bundle.ai_model,
-            bundle.criterion,
-            bundle.postprocessors,
-            data_loader_val,
-            base_ds,
-            device,
-        )
-        return
 
     train.run(
         bundle,

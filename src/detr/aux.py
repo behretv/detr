@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
+import torch
 import torchvision.transforms.v2 as v2
 from torch.utils.data import DataLoader
 
 from detr.dataset import CocoDetection
 from detr.misc import collate_fn
-from detr.transforms import FinalizeTargets
+from detr.transforms import make_coco_transforms
 
 DATA_ROOT: Path = Path(os.environ.get("DETR_DATA_ROOT", "/mnt/data"))
 """Root directory for datasets and model artefacts.
@@ -21,13 +22,12 @@ Override via the ``DETR_DATA_ROOT`` environment variable.
 
 
 def load_dataset(
-    ann_file: Path | str,
+    ann_file: Path,
     transforms: Sequence | v2.Compose,
     shuffle: bool = True,
     batch_size: int = 2,
     num_workers: int = 2,
     return_masks: bool = False,
-    img_folder: Path | str | None = None,
 ) -> DataLoader:
     """Build a COCO ``DataLoader`` from an annotation file.
 
@@ -49,22 +49,13 @@ def load_dataset(
         Override for the image directory; defaults to ``ann_file.parent``.
     """
     ann_file = Path(ann_file)
-    img_folder = Path(img_folder) if img_folder is not None else ann_file.parent
-
-    if isinstance(transforms, v2.Compose):
-        items = list(transforms.transforms)
-    elif isinstance(transforms, Iterable):
-        items = list(transforms)
-    else:
-        raise TypeError(
-            f"transforms must be a v2.Compose or iterable, got {type(transforms).__name__}"
-        )
-
-    if not any(isinstance(t, FinalizeTargets) for t in items):
-        items.append(FinalizeTargets())
+    transforms = make_coco_transforms(ann_file.parent.name.split(".")[0])
 
     dataset = CocoDetection(
-        img_folder, ann_file, transforms=v2.Compose(items), return_masks=return_masks
+        ann_file.parent,
+        ann_file,
+        transforms=transforms,
+        return_masks=return_masks,
     )
     return DataLoader(
         dataset,
@@ -73,6 +64,7 @@ def load_dataset(
         collate_fn=collate_fn,
         num_workers=num_workers,
     )
+
 
 def to_device(images: list[torch.Tensor], targets: list[dict], device: str):
     """Move images and targets to device."""

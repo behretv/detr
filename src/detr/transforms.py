@@ -98,12 +98,10 @@ def make_coco_transforms(
         v2.Normalize(mean=params.normalize_mean, std=params.normalize_std),
         FinalizeTargets(),
     ]
-    if image_set == "val":
+    if image_set in ["valid", "holdout"]:
         return v2.Compose(
             [
-                v2.Resize(
-                    max(params.scales), max_size=params.max_size, antialias=True
-                ),
+                v2.Resize(max(params.scales), max_size=params.max_size, antialias=True),
                 *tail,
             ]
         )
@@ -120,9 +118,7 @@ def make_coco_transforms(
                                 RandomSizeCrop(
                                     params.crop_min_size, params.crop_max_size
                                 ),
-                                RandomResize(
-                                    params.scales, max_size=params.max_size
-                                ),
+                                RandomResize(params.scales, max_size=params.max_size),
                             ]
                         ),
                     ],
@@ -132,3 +128,19 @@ def make_coco_transforms(
             ]
         )
     raise ValueError(f"unknown image_set {image_set!r}")
+
+
+def default_transforms() -> list[v2.Transform]:
+    """Standard inference / base transforms.
+
+    The short-side ``v2.Resize`` matches the validation pipeline of
+    :func:`detr.transforms.make_coco_transforms` and keeps the DETR encoder's
+    attention map within a tractable memory budget; without it, native-resolution
+    images quickly blow up GPU memory.
+    """
+    return [
+        v2.Resize(800, max_size=1333, antialias=True),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]

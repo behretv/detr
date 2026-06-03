@@ -9,10 +9,13 @@ import argparse
 import json
 from pathlib import Path
 
+import torch
 from loguru import logger
 
 import detr
 from detr import aux, model, parameters, train
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def main(args: argparse.Namespace):
@@ -27,6 +30,7 @@ def main(args: argparse.Namespace):
 
     # Load model
     model_data = model.load_from_file(args.model, args.device)
+    logger.info(f"Training parameters: {model_data.train_params}")
 
     # Patch model_data
     with open(t_file, "r", encoding="utf-8") as f:
@@ -36,7 +40,7 @@ def main(args: argparse.Namespace):
     # Load transforms
     t_transforms = model_data.transforms
     if args.augment:
-        t_transforms += train.augmentation_transforms(aug_params)
+        t_transforms = detr.transforms.make_coco_transforms("train")
 
     # Load dataset
     t_loader = aux.load_dataset(
@@ -57,7 +61,7 @@ def main(args: argparse.Namespace):
     if args.dir_output:
         new_model_data.export(args.dir_output / model_data.name)
 
-    outputs = detr.coco.inference(new_model_data, v_loader)
+    outputs = detr.coco.inference(new_model_data, v_loader, device=DEVICE)
     stats = detr.coco.run_eval(h_file, outputs)
     logger.info(f"Validation metrics: {stats}")
 

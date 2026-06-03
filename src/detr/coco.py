@@ -21,7 +21,7 @@ from pycocotools.cocoeval import COCOeval
 from torchvision import ops
 from tqdm import tqdm
 
-from . import aux, model
+from . import model
 
 
 class CocoEvaluator(object):
@@ -211,7 +211,9 @@ def evaluate(self):
 #################################################################
 
 
-def inference(model_data: model.Bundle, loader: torch.utils.data.DataLoader) -> list:
+def inference(
+    model_data: model.Bundle, loader: torch.utils.data.DataLoader, device: str
+) -> list:
     """Runs COCO evaluation and prints results to stdout.
 
     Args:
@@ -219,27 +221,29 @@ def inference(model_data: model.Bundle, loader: torch.utils.data.DataLoader) -> 
         data_loader: A PyTorch data loader for the COCO dataset.
     """
     ai_model = model_data.ai_model
-    ai_model.to(model_data.device)
+    ai_model.to(device)
     ai_model.eval()
 
     results = []
     for images, targets in tqdm(loader, desc="Evaluating model"):
-        images, target = aux.to_device(images, targets, model_data.device)
+        images = images.to(device)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         with torch.no_grad():
             outputs = ai_model(images)
 
-        for out, target in zip(outputs, targets):
-            # Convert boxes using torch
-            out["boxes"] = ops.box_convert(out["boxes"], in_fmt="xyxy", out_fmt="xywh")
+        orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
+        batch_results = model_data.postprocessors["bbox"](outputs, orig_target_sizes)
 
-            outputs = {k: v.detach().cpu() for k, v in out.items()}
-            for box, label, score in zip(out["boxes"], out["labels"], out["scores"]):
+        for out, target in zip(batch_results, targets):
+            # Convert boxes from xyxy to xywh format
+            boxes = ops.box_convert(out["boxes"], in_fmt="xyxy", out_fmt="xywh")
+            for box, label, score in zip(boxes, out["labels"], out["scores"]):
                 results.append(
                     {
-                        "image_id": int(target["image_id"]),
-                        "category_id": int(label),
+                        "image_id": int(target["image_id"].item()),
+                        "category_id": int(label.item()),
                         "bbox": box.tolist(),
-                        "score": float(score),
+                        "score": float(score.item()),
                     }
                 )
 

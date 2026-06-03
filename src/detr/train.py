@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import datetime
-import json
 import math
 import sys
 import time
@@ -15,8 +14,6 @@ from loguru import logger
 from tqdm import tqdm
 
 from detr import coco
-from detr.evaluate import evaluate
-from detr.logger import MetricLogger, SmoothedValue
 from detr.model import Bundle
 from detr.parameters import Augmentation, Train
 from detr.transforms import RandomResize, RandomSizeCrop
@@ -60,15 +57,8 @@ def train_one_epoch(
 ):
     model.train()
     criterion.train()
-    metric_logger = MetricLogger(delimiter="  ")
-    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
-    metric_logger.add_meter(
-        "class_error", SmoothedValue(window_size=1, fmt="{value:.2f}")
-    )
-    header = f"Epoch: [{epoch}]"
-    print_freq = 10
 
-    for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
+    for samples, targets in data_loader:
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -79,7 +69,6 @@ def train_one_epoch(
             loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict
         )
 
-        loss_dict_unscaled = {f"{k}_unscaled": v for k, v in loss_dict.items()}
         loss_dict_scaled = {
             k: v * weight_dict[k] for k, v in loss_dict.items() if k in weight_dict
         }
@@ -96,20 +85,17 @@ def train_one_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
         optimizer.step()
 
-        metric_logger.update(loss=loss_value, **loss_dict_scaled, **loss_dict_unscaled)
-        metric_logger.update(class_error=loss_dict["class_error"])
-        metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-    tqdm.write("Averaged stats: " + str(metric_logger))
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    return loss_dict_scaled
 
 
 def run(
     bundle: Bundle,
     train_loader: Iterable,
     val_loader: Iterable,
+    device: str,
     params: Train | None = None,
-    output_dir: Path | str | None = None,
-    base_ds=None,
+    output_dir: Path | None = None,
+    v_file: Path | None = None,
 ) -> Bundle:
     """Train *bundle* for the given number of epochs and return an updated bundle.
 
@@ -131,9 +117,6 @@ def run(
     output_dir:
         Directory where checkpoints and logs are written.  Pass ``None`` to
         disable persistence.
-    base_ds:
-        COCO API object for the validation set, used by the evaluator.
-        Pass ``None`` to skip COCO evaluation (loss stats are still logged).
 
     Returns
     -------
@@ -146,14 +129,6 @@ def run(
     output_dir = Path(output_dir) if output_dir else None
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
-
-    if base_ds is None:
-        dataset = getattr(val_loader, "dataset", None)
-        coco_api = getattr(dataset, "coco_api", None)
-        if callable(coco_api):
-            base_ds = coco_api()
-
-    device = torch.device(bundle.device)
 
     # Work on a copy so the caller's bundle is not mutated
     new_model = copy.copy(bundle)
@@ -194,20 +169,16 @@ def run(
         )
         lr_scheduler.step()
 
-        test_stats = evaluate(
-            new_model.ai_model,
-            new_model.criterion,
-            new_model.postprocessors,
-            val_loader,
-            base_ds,
-            device,
-        )
-
+        if v_file is not None:
+            outputs = coco.inference(new_model, val_loader, device)
+            val_stats = coco.run_eval(v_file, outputs)
+        else:
+            val_stats = {}
 
         log_entry = {
             "epoch": epoch,
             **{f"train_{k}": v for k, v in train_stats.items()},
-            **{f"val_{k}": v for k, v in test_stats.items()},
+            **{f"val_{k}": v for k, v in val_stats.items()},
         }
         new_model.logs.append(log_entry)
 

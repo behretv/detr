@@ -10,28 +10,13 @@ import torch.nn as nn
 import torchvision.transforms.v2 as v2
 from loguru import logger
 
+import detr
 import detr.parameters as parameters
 from detr.models.backbone import build_backbone
 from detr.models.detr import DETR, PostProcess, SetCriterion
 from detr.models.matcher import build_matcher
 from detr.models.segmentation import DETRsegm, PostProcessSegm
 from detr.models.transformer import build_transformer
-
-
-def default_transforms() -> list[v2.Transform]:
-    """Standard inference / base transforms.
-
-    The short-side ``v2.Resize`` matches the validation pipeline of
-    :func:`detr.transforms.make_coco_transforms` and keeps the DETR encoder's
-    attention map within a tractable memory budget; without it, native-resolution
-    images quickly blow up GPU memory.
-    """
-    return [
-        v2.Resize(800, max_size=1333, antialias=True),
-        v2.ToImage(),
-        v2.ToDtype(torch.float32, scale=True),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
 
 
 @dataclass
@@ -50,7 +35,6 @@ class Bundle:
     source        : origin of the weights (e.g. a file path or URL).
     transforms    : inference / validation transforms applied to inputs.
     cats          : mapping from COCO category id → category name.
-    device        : ``"cuda"`` when a GPU is available, otherwise ``"cpu"``.
     logs          : list of per-epoch stat dicts appended during training.
     """
 
@@ -64,15 +48,19 @@ class Bundle:
     source: str = ""
     transforms: list[v2.Transform] = field(default_factory=list)
     cats: dict[int, str] = field(default_factory=dict)
-    device: str = field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu"
-    )
     logs: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self):
         self.name = self.name or f"detr_{self.model_params.backbone.value}"
-        self.ai_model = self.ai_model.to(self.device)
-        self.criterion = self.criterion.to(self.device)
+
+        n_parameters = sum(
+            p.numel() for p in self.ai_model.parameters() if p.requires_grad
+        )
+        logger.info(f"Loaded model with {n_parameters / 1e6:.2f} M parameters")
+
+    def set_device(self, device: str) -> None:
+        self.ai_model = self.ai_model.to(device)
+        self.criterion = self.criterion.to(device)
 
     def export(self, file: Path | str) -> None:
         """Save weights + architecture params to *file*.pth and logs to *file*.csv.
@@ -101,7 +89,6 @@ def factory(
     model_params: parameters.Model,
     loss_params: parameters.Loss,
     train_params: parameters.Train,
-    run_params: parameters.Run,
 ) -> Bundle:
     # the `num_classes` naming here is somewhat misleading.
     # it indeed corresponds to `max_obj_id + 1`, where max_obj_id
@@ -159,7 +146,6 @@ def factory(
         model_params=model_params,
         loss_params=loss_params,
         train_params=train_params,
-        device=run_params.device,
     )
 
 
@@ -184,13 +170,11 @@ def load_from_file(
     logger.info(f"Loading model from {file}")
     model_data = torch.load(file, map_location=device, weights_only=False)
 
-    run_params = parameters.Run(device=device)
-
     model_params: parameters.Model = model_data.get("model_params", parameters.Model())
     loss_params: parameters.Loss = model_data.get("loss_params", parameters.Loss())
     train_params: parameters.Train = model_data.get("train_params", parameters.Train())
 
-    bundle = factory(model_params, loss_params, train_params, run_params)
+    bundle = factory(model_params, loss_params, train_params)
 
     state_dict = model_data.get("state_dict") or model_data.get("model")
     if state_dict is None:
@@ -198,5 +182,7 @@ def load_from_file(
     bundle.ai_model.load_state_dict(state_dict)
 
     bundle.source = str(file)
-    bundle.transforms = model_data.get("transforms", default_transforms())
+    bundle.transforms = model_data.get(
+        "transforms", detr.transforms.default_transforms()
+    )
     return bundle

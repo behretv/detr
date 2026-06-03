@@ -28,22 +28,14 @@ class CocoDetection(torchvision.datasets.CocoDetection):
     @classmethod
     def build(
         cls,
-        image_set: str,
-        run_params: parameters.Run,
+        file: Path,
         model_params: parameters.Model,
         aug_params: parameters.Augmentation | None = None,
     ) -> CocoDetection:
-        root = Path(run_params.dataset)
-        if not root.exists():
-            raise FileNotFoundError(f"provided COCO path {root} does not exist")
-        PATHS = {
-            "train": (root, root / "train.coco.json"),
-            "val": (root, root / "valid.coco.json"),
-        }
-        img_folder, ann_file = PATHS[image_set]
+        image_set = file.name.split(".")[0]
         return cls(
-            img_folder,
-            ann_file,
+            file.parent,
+            file,
             transforms=make_coco_transforms(image_set, aug_params),
             return_masks=model_params.masks,
         )
