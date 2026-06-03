@@ -58,7 +58,13 @@ def train_one_epoch(
     model.train()
     criterion.train()
 
-    for samples, targets in data_loader:
+    for samples, targets in tqdm(
+        data_loader,
+        desc=f"Epoch {epoch}",
+        position=0,
+        leave=False,
+        dynamic_ncols=True,
+    ):
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -157,7 +163,7 @@ def run(
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, params.lr_drop)
 
     start_time = time.time()
-    for epoch in tqdm(range(params.epochs), desc="Epochs"):
+    for epoch in tqdm(range(params.epochs), desc="Epochs", position=1, leave=True):
         train_stats = train_one_epoch(
             new_model.ai_model,
             new_model.criterion,
