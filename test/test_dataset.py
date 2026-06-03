@@ -1,0 +1,61 @@
+"""
+Created on 2026-06-03
+Copyright (c) 2026 Munich University of Applied Sciences
+"""
+
+import pytest
+import torch
+
+import detr
+
+from ._fixtures import coco_root, train_loader
+
+
+def test_dataset_length(coco_root):
+    ds = detr.dataset.CocoDetection(
+        coco_root,
+        coco_root / "train.coco.json",
+        transforms=detr.transforms.make_coco_transforms("train"),
+        return_masks=False,
+    )
+    assert len(ds) == 4
+
+
+def test_dataset_item_keys(coco_root):
+    ds = detr.dataset.CocoDetection(
+        coco_root,
+        coco_root / "train.coco.json",
+        transforms=detr.transforms.make_coco_transforms("valid"),
+        return_masks=False,
+    )
+    img, target = ds[0]
+    assert isinstance(img, torch.Tensor)
+    for key in ("boxes", "labels", "image_id", "area", "iscrowd", "orig_size", "size"):
+        assert key in target, f"missing key: {key}"
+
+
+def test_dataset_boxes_normalised(coco_root):
+    ds = detr.dataset.CocoDetection(
+        coco_root,
+        coco_root / "train.coco.json",
+        transforms=detr.transforms.make_coco_transforms("valid"),
+        return_masks=False,
+    )
+    _, target = ds[0]
+    boxes = target["boxes"]
+    assert (boxes >= 0).all(), "box coords should be non-negative"
+    assert (boxes <= 1).all(), "box coords should be ≤ 1 after normalisation"
+
+
+def test_build_dataset(coco_root):
+    ds = detr.dataset.CocoDetection.build(
+        coco_root / "train.coco.json", detr.parameters.Model()
+    )
+    assert len(ds) > 0
+
+
+def test_dataloader_batch(train_loader):
+    samples, targets = next(iter(train_loader))
+    assert len(targets) == 2
+    assert samples.tensors is not None
+    assert samples.tensors.shape[0] == 2

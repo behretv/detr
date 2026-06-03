@@ -85,7 +85,7 @@ def train_one_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
         optimizer.step()
 
-    return loss_dict_scaled
+    return {key: value.item() for key, value in loss_dict_scaled.items()}
 
 
 def run(
@@ -157,7 +157,7 @@ def run(
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, params.lr_drop)
 
     start_time = time.time()
-    for epoch in range(params.epochs):
+    for epoch in tqdm(range(params.epochs), desc="Epochs"):
         train_stats = train_one_epoch(
             new_model.ai_model,
             new_model.criterion,
