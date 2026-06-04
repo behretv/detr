@@ -11,7 +11,7 @@ from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.ops import FrozenBatchNorm2d
 
 import detr.parameters as parameters
-from detr.misc import NestedTensor
+from detr.aux import NestedTensor
 
 from .position_encoding import build_position_encoding
 

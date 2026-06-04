@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -62,22 +62,25 @@ class Bundle:
         self.ai_model = self.ai_model.to(device)
         self.criterion = self.criterion.to(device)
 
-    def export(self, file: Path | str) -> None:
+    def export(self, file: Path) -> None:
         """Save weights + architecture params to *file*.pth and logs to *file*.csv.
 
         Enough information is stored to fully reconstruct the bundle via
         ``Bundle.load_from_file()``.
         """
+        if file.exists():
+            raise FileExistsError(f"File {file} already exists!")
+
+        logger.info(f"Exporting bundle to {file}")
         torch.save(
             {
                 "state_dict": self.ai_model.state_dict(),
-                "model_params": self.model_params,
-                "loss_params": self.loss_params,
-                "train_params": self.train_params,
+                "model_params": asdict(self.model_params),
+                "loss_params": asdict(self.loss_params),
+                "train_params": asdict(self.train_params),
                 "name": self.name,
                 "source": self.source,
                 "cats": self.cats,
-                "device": self.device,
             },
             Path(file).with_suffix(".pth"),
         )
@@ -186,3 +189,16 @@ def load_from_file(
         "transforms", detr.transforms.default_transforms()
     )
     return bundle
+
+
+def filename(dir_output: Path, name: str) -> Path:
+    """Add a suffix wit an index if the output folder already exists."""
+    suffix = "pth"
+    file_new = dir_output / f"{name}_00.{suffix}"
+    for idx in range(1, 99, 1):
+        if not file_new.exists():
+            logger.info(f"Output file: {file_new}")
+            return file_new
+        file_new = dir_output / f"{name}_{idx:02d}.{suffix}"
+
+    raise ValueError("Unable to find a non-existing output file!")

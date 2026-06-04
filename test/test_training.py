@@ -5,7 +5,7 @@ from PIL import Image
 
 import detr
 from detr.dataset import CocoDetection
-from detr.misc import collate_fn
+from detr.aux import collate_fn
 from detr.train import train_one_epoch
 from detr.transforms import make_coco_transforms
 

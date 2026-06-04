@@ -21,29 +21,12 @@ from loguru import logger
 from torch.utils.data import DataLoader
 
 import detr
-import detr.misc as utils
+import detr.aux as utils
 import detr.parameters as parameters
 import detr.train as train
 from detr.dataset import CocoDetection
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def get_args_parser():
-    parser = argparse.ArgumentParser(
-        "DETR instance-segmentation training", add_help=False
-    )
-    parameters.add_args(parser, parameters.Train)
-    parameters.add_args(parser, parameters.Model)
-    parameters.add_args(parser, parameters.Loss)
-    parameters.add_args(parser, parameters.Augmentation)
-    parser.add_argument(
-        "--frozen-weights",
-        type=Path,
-        default=None,
-        help="Path to pretrained DETR weights to freeze",
-    )
-    return parser
 
 
 def main(args):
@@ -72,19 +55,17 @@ def main(args):
         bundle.ai_model.detr.load_state_dict(state_dict)
         logger.info(f"Loaded frozen weights from {args.frozen_weights}")
 
-    n_parameters = sum(
-        p.numel() for p in bundle.ai_model.parameters() if p.requires_grad
-    )
-    logger.info(f"Trainable params: {n_parameters}")
-
     t_file = Path(args.dataset) / "train.coco.json"
     v_file = Path(args.dataset) / "valid.coco.json"
+    h_file = Path(args.dataset) / "holdout.coco.json"
 
     t_dataset = CocoDetection.build(t_file, model_params, aug_params)
     v_dataset = CocoDetection.build(v_file, model_params, aug_params)
+    h_dataset = CocoDetection.build(h_file, model_params, aug_params)
 
     t_sampler = torch.utils.data.RandomSampler(t_dataset)
     v_sampler = torch.utils.data.SequentialSampler(v_dataset)
+    h_sampler = torch.utils.data.SequentialSampler(h_dataset)
 
     t_batch_sampler = torch.utils.data.BatchSampler(
         t_sampler, train_params.batch_size, drop_last=True
@@ -104,6 +85,14 @@ def main(args):
         collate_fn=utils.collate_fn,
         num_workers=train_params.num_workers,
     )
+    h_loader = DataLoader(
+        h_dataset,
+        train_params.batch_size,
+        sampler=h_sampler,
+        drop_last=False,
+        collate_fn=utils.collate_fn,
+        num_workers=train_params.num_workers,
+    )
 
     bundle = train.run(
         bundle,
@@ -111,19 +100,31 @@ def main(args):
         v_loader,
         device=DEVICE,
         params=train_params,
-        output_dir=args.output_dir,
         v_file=v_file,
     )
 
     outputs = detr.coco.inference(bundle, v_loader, device=DEVICE)
-    stats = detr.coco.run_eval(v_file, outputs)
+    stats = detr.coco.run_eval(v_file, outputs, iou_type="segm")
     logger.info(f"Validation metrics: {stats}")
+
+    outputs = detr.coco.inference(bundle, h_loader, device=DEVICE)
+    stats = detr.coco.run_eval(h_file, outputs, iou_type="segm")
+    logger.info(f"Holdout metrics: {stats}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        "DETR instance-segmentation training script",
-        parents=[get_args_parser()],
+        "DETR instance-segmentation training", add_help=False
+    )
+    parameters.add_args(parser, parameters.Train)
+    parameters.add_args(parser, parameters.Model)
+    parameters.add_args(parser, parameters.Loss)
+    parameters.add_args(parser, parameters.Augmentation)
+    parser.add_argument(
+        "--frozen-weights",
+        type=Path,
+        default=None,
+        help="Path to pretrained DETR weights to freeze",
     )
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--dataset", type=Path, required=True)

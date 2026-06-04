@@ -71,7 +71,6 @@ def run(
     val_loader: Iterable,
     device: str,
     params: Train | None = None,
-    output_dir: Path | None = None,
     v_file: Path | None = None,
 ) -> Bundle:
     """Train *bundle* for the given number of epochs and return an updated bundle.
@@ -91,9 +90,8 @@ def run(
     params:
         Training hyperparameters.  Defaults to ``Train()`` (sensible
         defaults for fine-tuning).
-    output_dir:
-        Directory where checkpoints and logs are written.  Pass ``None`` to
-        disable persistence.
+    v_file:
+        Path to validation annotations JSON for COCO evaluation.
 
     Returns
     -------
@@ -102,10 +100,6 @@ def run(
     """
     if params is None:
         params = Train()
-
-    output_dir = Path(output_dir) if output_dir else None
-    if output_dir is not None:
-        output_dir.mkdir(parents=True, exist_ok=True)
 
     # Work on a copy so the caller's bundle is not mutated
     new_model = copy.copy(bundle)
@@ -148,7 +142,8 @@ def run(
 
         if v_file is not None:
             outputs = coco.inference(new_model, val_loader, device)
-            val_stats = coco.run_eval(v_file, outputs)
+            iou_type = "segm" if new_model.model_params.masks else "bbox"
+            val_stats = coco.run_eval(v_file, outputs, iou_type)
         else:
             val_stats = {}
 

@@ -9,7 +9,7 @@ from loguru import logger
 from torch.utils.data import DataLoader
 
 import detr
-import detr.misc as utils
+import detr.aux as utils
 import detr.parameters as parameters
 import detr.train as train
 from detr.dataset import CocoDetection
@@ -85,24 +85,27 @@ def main(args):
         v_loader,
         device=DEVICE,
         params=train_params,
-        output_dir=args.output_dir,
         v_file=v_file,
     )
 
     outputs = detr.coco.inference(bundle, v_loader, device=DEVICE)
-    stats = detr.coco.run_eval(v_file, outputs)
+    stats = detr.coco.run_eval(v_file, outputs, iou_type="bbox")
     logger.info(f"Validation metrics: {stats}")
 
     outputs = detr.coco.inference(bundle, h_loader, device=DEVICE)
-    stats = detr.coco.run_eval(h_file, outputs)
+    stats = detr.coco.run_eval(h_file, outputs, iou_type="bbox")
     logger.info(f"Holdout metrics: {stats}")
+
+    if args.output_dir:
+        filename = detr.model.filename(args.output_dir, bundle.name)
+        bundle.export(filename)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "DETR training and evaluation script", parents=[get_args_parser()]
     )
-    parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--model", type=Path, required=True)
     args = parser.parse_args()

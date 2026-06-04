@@ -56,7 +56,7 @@ def inference(
     return results
 
 
-def run_eval(file_holdout: Path, results: list[dict]) -> dict:
+def run_eval(file_holdout: Path, results: list[dict], iou_type: str) -> dict:
     """Runs COCO evaluation and prints results to stdout."""
     coco_gt = COCO(file_holdout)
 
@@ -65,25 +65,25 @@ def run_eval(file_holdout: Path, results: list[dict]) -> dict:
         return {}
 
     coco_dt = coco_gt.loadRes(results)
-    coco_eval = COCOeval(coco_gt, coco_dt, iouType="bbox")
+    coco_eval = COCOeval(coco_gt, coco_dt, iouType=iou_type)
     coco_eval.params.useCats = 1
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
 
     # Convert stats to dict
-    coco_eval.stats = coco_eval.stats.round(3)
+    stats = list(coco_eval.stats.round(3))
     return {
-        "ap_mean": coco_eval.stats[0],
-        "ap_50": coco_eval.stats[1],
-        "ap_75": coco_eval.stats[2],
-        "ap_small": coco_eval.stats[3],
-        "ap_medium": coco_eval.stats[4],
-        "ap_large": coco_eval.stats[5],
-        "ar_max_1": coco_eval.stats[6],
-        "ar_max_10": coco_eval.stats[7],
-        "ar_max_100": coco_eval.stats[8],
-        "ar_small": coco_eval.stats[9],
-        "ar_medium": coco_eval.stats[10],
-        "ar_large": coco_eval.stats[11],
+        "ap_mean": stats[0],
+        "ap_50": stats[1],
+        "ap_75": stats[2],
+        "ap_small": stats[3],
+        "ap_medium": stats[4],
+        "ap_large": stats[5],
+        "ar_max_1": stats[6],
+        "ar_max_10": stats[7],
+        "ar_max_100": stats[8],
+        "ar_small": stats[9],
+        "ar_medium": stats[10],
+        "ar_large": stats[11],
     }

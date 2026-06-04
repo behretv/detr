@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from detr.misc import (
+from detr.aux import (
     NestedTensor,
     nested_tensor_from_tensor_list,
 )

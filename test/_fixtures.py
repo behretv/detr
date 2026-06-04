@@ -49,7 +49,7 @@ def train_loader(coco_root):
         return_masks=False,
     )
     return torch.utils.data.DataLoader(
-        ds, batch_size=2, collate_fn=detr.misc.collate_fn, num_workers=0
+        ds, batch_size=2, collate_fn=detr.aux.collate_fn, num_workers=0
     )
 
 

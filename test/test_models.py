@@ -3,7 +3,7 @@ import torch
 from torch import Tensor, nn
 from torchvision.ops import box_convert
 
-from detr.misc import nested_tensor_from_tensor_list
+from detr.aux import nested_tensor_from_tensor_list
 from detr.models.backbone import Backbone, Joiner
 from detr.models.detr import DETR
 from detr.models.matcher import HungarianMatcher
