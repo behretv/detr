@@ -8,14 +8,18 @@ Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Sequence
 
 import torch
 import torch.utils.data
 import torchvision
+import torchvision.transforms.v2 as v2
 from pycocotools import mask as coco_mask
+from torch.utils.data import DataLoader
 from torchvision import tv_tensors
 
 import detr.parameters as parameters
+from detr.aux import collate_fn
 from detr.transforms import make_coco_transforms
 
 
@@ -56,6 +60,51 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         if self._transforms is not None:
             img, target = self._transforms(img, target)
         return img, target
+
+
+def load_dataset(
+    ann_file: Path,
+    transforms: Sequence | v2.Compose,
+    shuffle: bool = True,
+    batch_size: int = 2,
+    num_workers: int = 2,
+    return_masks: bool = False,
+) -> DataLoader:
+    """Build a COCO ``DataLoader`` from an annotation file.
+
+    Parameters
+    ----------
+    ann_file:
+        Path to a COCO-format ``*.json`` file. Image files are expected to live
+        in the same directory unless ``img_folder`` is provided.
+    transforms:
+        Either a :class:`v2.Compose` or a list of transforms.
+        :class:`~detr.transforms.FinalizeTargets` is appended automatically if
+        not already present, so callers can freely concatenate base and
+        augmentation transforms in either order.
+    shuffle:
+        Whether the loader should reshuffle each epoch.
+    batch_size, num_workers, return_masks:
+        Standard DataLoader / dataset knobs.
+    img_folder:
+        Override for the image directory; defaults to ``ann_file.parent``.
+    """
+    ann_file = Path(ann_file)
+    transforms = make_coco_transforms(ann_file.parent.name.split(".")[0])
+
+    dataset = CocoDetection(
+        ann_file.parent,
+        ann_file,
+        transforms=transforms,
+        return_masks=return_masks,
+    )
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+    )
 
 
 def convert_coco_poly_to_mask(segmentations, height, width):

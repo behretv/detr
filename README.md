@@ -93,7 +93,7 @@ Two further scripts wrap `detr.train.run` directly with the full argparse-from-d
 
 ```python
 from detr import Bundle, parameters
-from detr.aux import load_dataset
+from detr.dataset import load_dataset
 from detr.train import augmentation_transforms, run
 
 bundle = Bundle.load_from_file("detr-r50-e632da11.pth", device="cuda")

@@ -3,7 +3,6 @@
 This file provides the definition of the convolutional heads used to predict masks, as well as the losses
 """
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,11 +12,6 @@ from detr.aux import (
     NestedTensor,
     nested_tensor_from_tensor_list,
 )
-
-try:
-    from panopticapi.utils import id2rgb, rgb2id
-except ImportError:
-    pass
 
 
 class DETRsegm(nn.Module):
@@ -275,5 +269,3 @@ class PostProcessSegm(nn.Module):
             ).byte()
 
         return results
-
-

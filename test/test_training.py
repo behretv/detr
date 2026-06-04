@@ -4,8 +4,8 @@ import torch
 from PIL import Image
 
 import detr
-from detr.dataset import CocoDetection
 from detr.aux import collate_fn
+from detr.dataset import CocoDetection
 from detr.train import train_one_epoch
 from detr.transforms import make_coco_transforms
 
@@ -123,5 +123,5 @@ def test_evaluate_runs(model_bundle, coco_root, device):
         ds, batch_size=2, collate_fn=collate_fn, num_workers=0
     )
     outputs = detr.coco.inference(model_bundle, loader, device)
-    stats = detr.coco.run_eval(coco_root / "valid.coco.json", outputs)
+    stats = detr.coco.run_eval(coco_root / "valid.coco.json", outputs, iou_type="bbox")
     assert "ap_mean" in stats
