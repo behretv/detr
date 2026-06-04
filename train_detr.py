@@ -54,6 +54,7 @@ def main(args: argparse.Namespace):
         model_data,
         t_loader,
         v_loader,
+        device=args.device,
         params=parameters.Train(batch_size=args.batch_size),
     )
 
