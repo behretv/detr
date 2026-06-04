@@ -46,21 +46,21 @@ def main(args):
     t_transforms = train_transforms(aug_params)
     v_transforms = test_transforms(aug_params)
 
-    t_loader = load_dataset(
+    t_loader = detr.dataset.load_dataset(
         t_file,
         t_transforms,
         return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
-    v_loader = load_dataset(
+    v_loader = detr.dataset.load_dataset(
         v_file,
         v_transforms,
         return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
-    h_loader = load_dataset(
+    h_loader = detr.dataset.load_dataset(
         h_file,
         v_transforms,
         return_masks=model_params.masks,

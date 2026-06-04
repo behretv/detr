@@ -29,7 +29,13 @@ def inference(
     results = []
     for images, targets in tqdm(loader, desc="Evaluating model"):
         images = images.to(device)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        targets = [
+            {
+                k: v.to(device) if isinstance(v, torch.Tensor) else v
+                for k, v in t.items()
+            }
+            for t in targets
+        ]
         with torch.no_grad():
             outputs = ai_model(images)
 

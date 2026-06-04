@@ -37,7 +37,13 @@ def train_one_epoch(
         dynamic_ncols=True,
     ):
         samples = samples.to(device)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        targets = [
+            {
+                k: v.to(device) if isinstance(v, torch.Tensor) else v
+                for k, v in t.items()
+            }
+            for t in targets
+        ]
 
         outputs = model(samples)
         loss_dict = criterion(outputs, targets)

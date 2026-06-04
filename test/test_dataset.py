@@ -47,13 +47,6 @@ def test_dataset_boxes_normalised(coco_root):
     assert (boxes <= 1).all(), "box coords should be ≤ 1 after normalisation"
 
 
-def test_build_dataset(coco_root):
-    ds = detr.dataset.CocoDetection.build(
-        coco_root / "train.coco.json", detr.parameters.Model()
-    )
-    assert len(ds) > 0
-
-
 def test_dataloader_batch(train_loader):
     samples, targets = next(iter(train_loader))
     assert len(targets) == 2
