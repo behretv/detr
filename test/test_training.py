@@ -7,7 +7,8 @@ import detr
 from detr.aux import collate_fn
 from detr.dataset import CocoDetection
 from detr.train import train_one_epoch
-from detr.transforms import make_coco_transforms
+from detr.transforms import default as test_transforms
+from detr.transforms import train as train_transforms
 
 from ._fixtures import coco_root, device, model_bundle, train_loader
 
@@ -43,27 +44,22 @@ def _make_tv_target(n_boxes: int = 3, h: int = 100, w: int = 100) -> dict:
     return t
 
 
-def test_make_coco_transforms_train():
-    img_out, target_out = make_coco_transforms("train")(
+def test_train_transforms():
+    img_out, target_out = train_transforms()(
         _make_pil(300, 400), _make_tv_target(h=300, w=400)
     )
     assert isinstance(img_out, torch.Tensor)
     assert "boxes" in target_out
 
 
-def test_make_coco_transforms_val():
-    img_out, target_out = make_coco_transforms("valid")(
+def test_test_transforms():
+    img_out, target_out = test_transforms()(
         _make_pil(300, 400), _make_tv_target(h=300, w=400)
     )
     assert isinstance(img_out, torch.Tensor)
     # Boxes must end up normalised (cxcywh in [0, 1]).
     assert (target_out["boxes"] >= 0).all()
     assert (target_out["boxes"] <= 1).all()
-
-
-def test_make_coco_transforms_unknown_raises():
-    with pytest.raises(ValueError):
-        make_coco_transforms("test")
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +112,7 @@ def test_evaluate_runs(model_bundle, coco_root, device):
     ds = CocoDetection(
         coco_root,
         coco_root / "valid.coco.json",
-        transforms=make_coco_transforms("valid"),
+        transforms=test_transforms(),
         return_masks=False,
     )
     loader = torch.utils.data.DataLoader(

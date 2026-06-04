@@ -185,9 +185,7 @@ def load_from_file(
     bundle.ai_model.load_state_dict(state_dict)
 
     bundle.source = str(file)
-    bundle.transforms = model_data.get(
-        "transforms", detr.transforms.default_transforms()
-    )
+    bundle.transforms = model_data.get("transforms", detr.transforms.default())
     return bundle
 
 

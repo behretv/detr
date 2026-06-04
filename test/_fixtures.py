@@ -45,7 +45,7 @@ def train_loader(coco_root):
     ds = detr.dataset.CocoDetection(
         coco_root,
         coco_root / "train.coco.json",
-        transforms=detr.transforms.make_coco_transforms("valid"),
+        transforms=detr.transforms.default(),
         return_masks=False,
     )
     return torch.utils.data.DataLoader(

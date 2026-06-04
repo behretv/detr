@@ -87,60 +87,45 @@ class FinalizeTargets:
         return image, target
 
 
-def make_coco_transforms(
-    image_set: str, params: Augmentation | None = None
-) -> v2.Compose:
-    """Build the full train or val COCO pipeline."""
-    params = params or Augmentation()
-    tail = [
+def _make_tail(params: Augmentation) -> list[v2.Transform]:
+    return [
         v2.ToImage(),
         v2.ToDtype(torch.float32, scale=True),
         v2.Normalize(mean=params.normalize_mean, std=params.normalize_std),
         FinalizeTargets(),
     ]
-    if image_set in ["valid", "holdout"]:
-        return v2.Compose(
-            [
-                v2.Resize(max(params.scales), max_size=params.max_size, antialias=True),
-                *tail,
-            ]
-        )
-    if image_set == "train":
-        return v2.Compose(
-            [
-                v2.RandomHorizontalFlip(p=params.hflip_prob),
-                v2.RandomChoice(
-                    [
-                        RandomResize(params.scales, max_size=params.max_size),
-                        v2.Compose(
-                            [
-                                RandomResize(params.pre_crop_scales),
-                                RandomSizeCrop(
-                                    params.crop_min_size, params.crop_max_size
-                                ),
-                                RandomResize(params.scales, max_size=params.max_size),
-                            ]
-                        ),
-                    ],
-                    p=[1 - params.crop_branch_prob, params.crop_branch_prob],
-                ),
-                *tail,
-            ]
-        )
-    raise ValueError(f"unknown image_set {image_set!r}")
 
 
-def default_transforms() -> list[v2.Transform]:
-    """Standard inference / base transforms.
+def train(params: Augmentation | None = None) -> v2.Compose:
+    """Build the training COCO pipeline."""
+    params = params or Augmentation()
+    return v2.Compose(
+        [
+            v2.RandomHorizontalFlip(p=params.hflip_prob),
+            v2.RandomChoice(
+                [
+                    RandomResize(params.scales, max_size=params.max_size),
+                    v2.Compose(
+                        [
+                            RandomResize(params.pre_crop_scales),
+                            RandomSizeCrop(params.crop_min_size, params.crop_max_size),
+                            RandomResize(params.scales, max_size=params.max_size),
+                        ]
+                    ),
+                ],
+                p=[1 - params.crop_branch_prob, params.crop_branch_prob],
+            ),
+            *_make_tail(params),
+        ]
+    )
 
-    The short-side ``v2.Resize`` matches the validation pipeline of
-    :func:`detr.transforms.make_coco_transforms` and keeps the DETR encoder's
-    attention map within a tractable memory budget; without it, native-resolution
-    images quickly blow up GPU memory.
-    """
-    return [
-        v2.Resize(800, max_size=1333, antialias=True),
-        v2.ToImage(),
-        v2.ToDtype(torch.float32, scale=True),
-        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
+
+def default(params: Augmentation | None = None) -> v2.Compose:
+    """Transformation for inference/validation/test."""
+    params = params or Augmentation()
+    return v2.Compose(
+        [
+            v2.Resize(max(params.scales), max_size=params.max_size, antialias=True),
+            *_make_tail(params),
+        ]
+    )

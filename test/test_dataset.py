@@ -15,7 +15,7 @@ def test_dataset_length(coco_root):
     ds = detr.dataset.CocoDetection(
         coco_root,
         coco_root / "train.coco.json",
-        transforms=detr.transforms.make_coco_transforms("train"),
+        transforms=detr.transforms.train(),
         return_masks=False,
     )
     assert len(ds) == 4
@@ -25,7 +25,7 @@ def test_dataset_item_keys(coco_root):
     ds = detr.dataset.CocoDetection(
         coco_root,
         coco_root / "train.coco.json",
-        transforms=detr.transforms.make_coco_transforms("valid"),
+        transforms=detr.transforms.default(),
         return_masks=False,
     )
     img, target = ds[0]
@@ -38,7 +38,7 @@ def test_dataset_boxes_normalised(coco_root):
     ds = detr.dataset.CocoDetection(
         coco_root,
         coco_root / "train.coco.json",
-        transforms=detr.transforms.make_coco_transforms("valid"),
+        transforms=detr.transforms.default(),
         return_masks=False,
     )
     _, target = ds[0]

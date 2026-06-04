@@ -18,13 +18,11 @@ from pathlib import Path
 import numpy as np
 import torch
 from loguru import logger
-from torch.utils.data import DataLoader
 
 import detr
-import detr.aux as utils
 import detr.parameters as parameters
 import detr.train as train
-from detr.dataset import CocoDetection
+from detr.dataset import load_dataset
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -59,38 +57,25 @@ def main(args):
     v_file = Path(args.dataset) / "valid.coco.json"
     h_file = Path(args.dataset) / "holdout.coco.json"
 
-    t_dataset = CocoDetection.build(t_file, model_params, aug_params)
-    v_dataset = CocoDetection.build(v_file, model_params, aug_params)
-    h_dataset = CocoDetection.build(h_file, model_params, aug_params)
-
-    t_sampler = torch.utils.data.RandomSampler(t_dataset)
-    v_sampler = torch.utils.data.SequentialSampler(v_dataset)
-    h_sampler = torch.utils.data.SequentialSampler(h_dataset)
-
-    t_batch_sampler = torch.utils.data.BatchSampler(
-        t_sampler, train_params.batch_size, drop_last=True
-    )
-
-    t_loader = DataLoader(
-        t_dataset,
-        batch_sampler=t_batch_sampler,
-        collate_fn=utils.collate_fn,
+    t_loader = load_dataset(
+        t_file,
+        model_params,
+        aug_params,
+        batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
-    v_loader = DataLoader(
-        v_dataset,
-        train_params.batch_size,
-        sampler=v_sampler,
-        drop_last=False,
-        collate_fn=utils.collate_fn,
+    v_loader = load_dataset(
+        v_file,
+        model_params,
+        aug_params,
+        batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
-    h_loader = DataLoader(
-        h_dataset,
-        train_params.batch_size,
-        sampler=h_sampler,
-        drop_last=False,
-        collate_fn=utils.collate_fn,
+    h_loader = load_dataset(
+        h_file,
+        model_params,
+        aug_params,
+        batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
 

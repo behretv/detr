@@ -8,19 +8,18 @@ Mostly copy-paste from https://github.com/pytorch/vision/blob/13b35ff/references
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
 
 import torch
 import torch.utils.data
 import torchvision
-import torchvision.transforms.v2 as v2
 from pycocotools import mask as coco_mask
 from torch.utils.data import DataLoader
 from torchvision import tv_tensors
 
 import detr.parameters as parameters
 from detr.aux import collate_fn
-from detr.transforms import make_coco_transforms
+from detr.transforms import default as test_transforms
+from detr.transforms import train as train_transforms
 
 
 class CocoDetection(torchvision.datasets.CocoDetection):
@@ -37,10 +36,15 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         aug_params: parameters.Augmentation | None = None,
     ) -> CocoDetection:
         image_set = file.name.split(".")[0]
+        tfms = (
+            train_transforms(aug_params)
+            if image_set == "train"
+            else test_transforms(aug_params)
+        )
         return cls(
             file.parent,
             file,
-            transforms=make_coco_transforms(image_set, aug_params),
+            transforms=tfms,
             return_masks=model_params.masks,
         )
 
@@ -64,47 +68,66 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
 def load_dataset(
     ann_file: Path,
-    transforms: Sequence | v2.Compose,
-    shuffle: bool = True,
+    model_params: parameters.Model,
+    aug_params: parameters.Augmentation | None = None,
     batch_size: int = 2,
     num_workers: int = 2,
-    return_masks: bool = False,
 ) -> DataLoader:
     """Build a COCO ``DataLoader`` from an annotation file.
+
+    The transform pipeline and sampler are chosen automatically from the
+    file name stem: ``train`` uses training transforms and a
+    :class:`RandomSampler`, while anything else uses test transforms and a
+    :class:`SequentialSampler`.
 
     Parameters
     ----------
     ann_file:
         Path to a COCO-format ``*.json`` file. Image files are expected to live
-        in the same directory unless ``img_folder`` is provided.
-    transforms:
-        Either a :class:`v2.Compose` or a list of transforms.
-        :class:`~detr.transforms.FinalizeTargets` is appended automatically if
-        not already present, so callers can freely concatenate base and
-        augmentation transforms in either order.
-    shuffle:
-        Whether the loader should reshuffle each epoch.
-    batch_size, num_workers, return_masks:
-        Standard DataLoader / dataset knobs.
-    img_folder:
-        Override for the image directory; defaults to ``ann_file.parent``.
+        in the same directory.
+    model_params:
+        Model parameters (used for ``return_masks``).
+    aug_params:
+        Augmentation parameters.  If ``None``, defaults are used.
+    batch_size, num_workers:
+        Standard DataLoader knobs.
     """
     ann_file = Path(ann_file)
-    transforms = make_coco_transforms(ann_file.parent.name.split(".")[0])
+    image_set = ann_file.name.split(".")[0]
+    is_train = image_set == "train"
 
+    transforms = (
+        train_transforms(aug_params) if is_train else test_transforms(aug_params)
+    )
     dataset = CocoDetection(
         ann_file.parent,
         ann_file,
         transforms=transforms,
-        return_masks=return_masks,
+        return_masks=model_params.masks,
     )
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        collate_fn=collate_fn,
-        num_workers=num_workers,
-    )
+
+    if is_train:
+        sampler = torch.utils.data.RandomSampler(dataset)
+        loader_kwargs = {
+            "dataset": dataset,
+            "batch_sampler": torch.utils.data.BatchSampler(
+                sampler, batch_size, drop_last=True
+            ),
+            "collate_fn": collate_fn,
+            "num_workers": num_workers,
+        }
+    else:
+        sampler = torch.utils.data.SequentialSampler(dataset)
+        loader_kwargs = {
+            "dataset": dataset,
+            "batch_size": batch_size,
+            "sampler": sampler,
+            "drop_last": False,
+            "collate_fn": collate_fn,
+            "num_workers": num_workers,
+        }
+
+    return DataLoader(**loader_kwargs)
 
 
 def convert_coco_poly_to_mask(segmentations, height, width):

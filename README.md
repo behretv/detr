@@ -94,18 +94,21 @@ Two further scripts wrap `detr.train.run` directly with the full argparse-from-d
 ```python
 from detr import Bundle, parameters
 from detr.dataset import load_dataset
-from detr.train import augmentation_transforms, run
 
 bundle = Bundle.load_from_file("detr-r50-e632da11.pth", device="cuda")
-train_loader = load_dataset("data/train.coco.json",
-                             bundle.transforms + augmentation_transforms(),
-                             shuffle=True, batch_size=4)
-val_loader   = load_dataset("data/valid.coco.json",
-                             bundle.transforms,
-                             shuffle=False, batch_size=4)
+model_params = parameters.Model()
+aug_params = parameters.Augmentation()
 
-bundle = run(bundle, train_loader, val_loader,
-             params=parameters.Train(epochs=10))
+train_loader = load_dataset(
+    "data/train.coco.json", model_params, aug_params, batch_size=4
+)
+val_loader = load_dataset(
+    "data/valid.coco.json", model_params, aug_params, batch_size=4
+)
+
+bundle = detr.train.run(
+    bundle, train_loader, val_loader, params=parameters.Train(epochs=10)
+)
 bundle.export("checkpoints/finetuned")          # writes .pth and .csv
 ```
 
