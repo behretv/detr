@@ -94,16 +94,23 @@ Two further scripts wrap `detr.train.run` directly with the full argparse-from-d
 ```python
 from detr import Bundle, parameters
 from detr.dataset import load_dataset
+from detr.transforms import default as test_transforms
+from detr.transforms import train as train_transforms
 
 bundle = Bundle.load_from_file("detr-r50-e632da11.pth", device="cuda")
-model_params = parameters.Model()
 aug_params = parameters.Augmentation()
 
 train_loader = load_dataset(
-    "data/train.coco.json", model_params, aug_params, batch_size=4
+    "data/train.coco.json",
+    train_transforms(aug_params),
+    return_masks=False,
+    batch_size=4,
 )
 val_loader = load_dataset(
-    "data/valid.coco.json", model_params, aug_params, batch_size=4
+    "data/valid.coco.json",
+    test_transforms(aug_params),
+    return_masks=False,
+    batch_size=4,
 )
 
 bundle = detr.train.run(

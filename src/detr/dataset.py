@@ -15,6 +15,7 @@ import torchvision
 from pycocotools import mask as coco_mask
 from torch.utils.data import DataLoader
 from torchvision import tv_tensors
+from torchvision.transforms import v2
 
 import detr.parameters as parameters
 from detr.aux import collate_fn
@@ -68,16 +69,15 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
 def load_dataset(
     ann_file: Path,
-    model_params: parameters.Model,
-    aug_params: parameters.Augmentation | None = None,
+    transforms: v2.Compose,
+    return_masks: bool = False,
     batch_size: int = 2,
     num_workers: int = 2,
 ) -> DataLoader:
     """Build a COCO ``DataLoader`` from an annotation file.
 
-    The transform pipeline and sampler are chosen automatically from the
-    file name stem: ``train`` uses training transforms and a
-    :class:`RandomSampler`, while anything else uses test transforms and a
+    The sampler is chosen automatically from the file name stem:
+    ``train`` uses a :class:`RandomSampler`, while anything else uses a
     :class:`SequentialSampler`.
 
     Parameters
@@ -85,10 +85,11 @@ def load_dataset(
     ann_file:
         Path to a COCO-format ``*.json`` file. Image files are expected to live
         in the same directory.
-    model_params:
-        Model parameters (used for ``return_masks``).
-    aug_params:
-        Augmentation parameters.  If ``None``, defaults are used.
+    transforms:
+        Pre-built transform pipeline (e.g. ``detr.transforms.train()`` or
+        ``detr.transforms.default()``).
+    return_masks:
+        Whether to include COCO segmentation masks in the target dict.
     batch_size, num_workers:
         Standard DataLoader knobs.
     """
@@ -96,14 +97,11 @@ def load_dataset(
     image_set = ann_file.name.split(".")[0]
     is_train = image_set == "train"
 
-    transforms = (
-        train_transforms(aug_params) if is_train else test_transforms(aug_params)
-    )
     dataset = CocoDetection(
         ann_file.parent,
         ann_file,
         transforms=transforms,
-        return_masks=model_params.masks,
+        return_masks=return_masks,
     )
 
     if is_train:
@@ -214,3 +212,30 @@ class ConvertCocoPolysToMask(object):
         target["size"] = torch.as_tensor([int(h), int(w)])
 
         return image, target
+
+
+def load_simple_dataset(
+    file: Path,
+    transforms: list[v2.Transform] | v2.Compose,
+    shuffle=True,
+    return_masks=False,
+):
+    """Wrapper for torch-based dataset"""
+    transforms = v2.Compose(transforms) if isinstance(transforms, list) else transforms
+    dataset_coco = torchvision.datasets.CocoDetection(
+        file.parent, str(file), transforms=transforms, return_masks=return_masks
+    )
+    dataset_coco = torchvision.datasets.wrap_dataset_for_transforms_v2(
+        dataset_coco,
+        target_keys=("boxes", "labels", "image_id")
+        if return_masks
+        else ("boxes", "labels", "image_id", "masks"),
+    )
+
+    return torch.utils.data.DataLoader(
+        dataset_coco,
+        batch_size=4,
+        shuffle=shuffle,
+        num_workers=8,
+        collate_fn=collate_fn,
+    )

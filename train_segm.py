@@ -23,6 +23,8 @@ import detr
 import detr.parameters as parameters
 import detr.train as train
 from detr.dataset import load_dataset
+from detr.transforms import default as test_transforms
+from detr.transforms import train as train_transforms
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -57,24 +59,27 @@ def main(args):
     v_file = Path(args.dataset) / "valid.coco.json"
     h_file = Path(args.dataset) / "holdout.coco.json"
 
+    t_transforms = train_transforms(aug_params)
+    v_transforms = test_transforms(aug_params)
+
     t_loader = load_dataset(
         t_file,
-        model_params,
-        aug_params,
+        t_transforms,
+        return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     v_loader = load_dataset(
         v_file,
-        model_params,
-        aug_params,
+        v_transforms,
+        return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     h_loader = load_dataset(
         h_file,
-        model_params,
-        aug_params,
+        v_transforms,
+        return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
