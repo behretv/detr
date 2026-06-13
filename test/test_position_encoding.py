@@ -2,7 +2,10 @@
 
 import torch
 
-from detr.models.position_encoding import PositionEmbeddingLearned, PositionEmbeddingSine
+from detr.models.position_encoding import (
+    PositionEmbeddingLearned,
+    PositionEmbeddingSine,
+)
 
 
 def test_position_encoding_script():
