@@ -10,7 +10,6 @@ from loguru import logger
 import detr
 import detr.parameters as parameters
 import detr.train as train
-from detr.dataset import load_dataset
 from detr.transforms import default as test_transforms
 from detr.transforms import train as train_transforms
 

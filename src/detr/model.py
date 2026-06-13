@@ -80,6 +80,7 @@ class Bundle:
                 "train_params": asdict(self.train_params),
                 "name": self.name,
                 "source": self.source,
+                "transforms": self.transforms,
                 "cats": self.cats,
             },
             Path(file).with_suffix(".pth"),

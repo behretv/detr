@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 import torch
 from PIL import Image
 
@@ -10,7 +9,6 @@ from detr.train import train_one_epoch
 from detr.transforms import default as test_transforms
 from detr.transforms import train as train_transforms
 
-from ._fixtures import coco_root, device, model_bundle, train_loader
 
 
 def _make_target(n_boxes: int = 3) -> dict:

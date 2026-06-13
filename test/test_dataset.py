@@ -3,12 +3,10 @@ Created on 2026-06-03
 Copyright (c) 2026 Munich University of Applied Sciences
 """
 
-import pytest
 import torch
 
 import detr
 
-from ._fixtures import coco_root, train_loader
 
 
 def test_dataset_length(coco_root):
