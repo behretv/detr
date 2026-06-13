@@ -5,7 +5,7 @@ test:
 		-w /app \
 		--user ubuntu \
 		hmcvlab/detr:latest \
-		bash -c "python -m pytest test/"
+		bash -c "pip install -e . --no-deps && python -m pytest test/"
 
 .PHONY: format
 format:

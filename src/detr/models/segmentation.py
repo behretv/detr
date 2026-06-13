@@ -8,10 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from detr.aux import (
-    NestedTensor,
-    nested_tensor_from_tensor_list,
-)
+from detr.aux import NestedTensor, nested_tensor_from_tensor_list
 
 
 class DETRsegm(nn.Module):
@@ -192,7 +189,7 @@ class MHAttentionMap(nn.Module):
         return weights
 
 
-def dice_loss(inputs, targets, num_boxes):
+def dice_loss(inputs, targets, num_boxes, valid=None):
     """
     Compute the DICE loss, similar to generalized IOU for masks
     Args:
@@ -201,17 +198,26 @@ def dice_loss(inputs, targets, num_boxes):
         targets: A float tensor with the same shape as inputs. Stores the binary
                  classification label for each element in inputs
                 (0 for the negative class and 1 for the positive class).
+        valid: Optional bool tensor of the same shape as inputs indicating
+               valid (non-padded) pixels. If provided, padded pixels are
+               excluded from the loss computation.
     """
     inputs = inputs.sigmoid()
     inputs = inputs.flatten(1)
-    numerator = 2 * (inputs * targets).sum(1)
-    denominator = inputs.sum(-1) + targets.sum(-1)
+    targets = targets.flatten(1)
+    if valid is not None:
+        valid = valid.flatten(1).float()
+        numerator = 2 * (inputs * targets * valid).sum(1)
+        denominator = (inputs * valid).sum(-1) + (targets * valid).sum(-1)
+    else:
+        numerator = 2 * (inputs * targets).sum(1)
+        denominator = inputs.sum(-1) + targets.sum(-1)
     loss = 1 - (numerator + 1) / (denominator + 1)
     return loss.sum() / num_boxes
 
 
 def sigmoid_focal_loss(
-    inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2
+    inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2, valid=None
 ):
     """
     Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
@@ -225,6 +231,9 @@ def sigmoid_focal_loss(
                 positive vs negative examples. Default = -1 (no weighting).
         gamma: Exponent of the modulating factor (1 - p_t) to
                balance easy vs hard examples.
+        valid: Optional bool tensor of the same shape as inputs indicating
+               valid (non-padded) pixels. If provided, padded pixels are
+               excluded from the loss computation.
     Returns:
         Loss tensor
     """
@@ -236,6 +245,10 @@ def sigmoid_focal_loss(
     if alpha >= 0:
         alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
         loss = alpha_t * loss
+
+    if valid is not None:
+        loss = loss * valid
+        return loss.sum() / num_boxes
 
     return loss.mean(1).sum() / num_boxes
 

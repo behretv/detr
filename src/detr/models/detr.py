@@ -120,8 +120,8 @@ class DETR(nn.Module):
             else:
                 # NestedTensor — infer from mask (non-padded region)
                 mask = samples.mask  # [B, H, W]
-                h = (~mask).sum(1).max(1)[0]
-                w = (~mask).sum(2).max(1)[0]
+                h = (~mask).sum(2).max(1)[0]
+                w = (~mask).sum(1).max(1)[0]
                 target_sizes = torch.stack([h, w], dim=1).to(
                     outputs["pred_logits"].device
                 )
@@ -156,7 +156,7 @@ class SetCriterion(nn.Module):
         empty_weight[-1] = self.eos_coef
         self.register_buffer("empty_weight", empty_weight)
 
-    def loss_labels(self, outputs, targets, indices, _num_boxes, log=True):
+    def loss_labels(self, outputs, targets, indices, _num_boxes):
         """Classification loss (NLL)
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
         """
@@ -179,14 +179,19 @@ class SetCriterion(nn.Module):
         loss_ce = F.cross_entropy(
             src_logits.transpose(1, 2), target_classes, self.empty_weight
         )
-        losses = {"loss_ce": loss_ce}
+        return {"loss_ce": loss_ce}
 
-        if log:
-            # TODO this should probably be a separate loss, not hacked in this one here
-            losses["class_error"] = (
-                100 - _accuracy(src_logits[idx], target_classes_o)[0]
-            )
-        return losses
+    @torch.no_grad()
+    def loss_class_error(self, outputs, targets, indices, _num_boxes):
+        """Classification accuracy for logging purposes only."""
+        if "pred_logits" not in outputs:
+            raise KeyError("outputs must contain 'pred_logits'")
+        src_logits = outputs["pred_logits"]
+        idx = self._get_src_permutation_idx(indices)
+        target_classes_o = torch.cat(
+            [t["labels"][J] for t, (_, J) in zip(targets, indices)]
+        )
+        return {"class_error": 100 - _accuracy(src_logits[idx], target_classes_o)[0]}
 
     @torch.no_grad()
     def loss_cardinality(self, outputs, targets, _indices, _num_boxes):
@@ -243,10 +248,10 @@ class SetCriterion(nn.Module):
         src_masks = outputs["pred_masks"]
         src_masks = src_masks[src_idx]
         masks = [t["masks"] for t in targets]
-        # TODO use valid to mask invalid areas due to padding in loss
         target_masks, valid = nested_tensor_from_tensor_list(masks).decompose()
         target_masks = target_masks.to(src_masks)
         target_masks = target_masks[tgt_idx]
+        valid = valid.to(src_masks.device)[tgt_idx]
 
         # upsample predictions to the target size
         src_masks = F.interpolate(
@@ -260,8 +265,10 @@ class SetCriterion(nn.Module):
         target_masks = target_masks.flatten(1)
         target_masks = target_masks.view(src_masks.shape)
         losses = {
-            "loss_mask": sigmoid_focal_loss(src_masks, target_masks, num_boxes),
-            "loss_dice": dice_loss(src_masks, target_masks, num_boxes),
+            "loss_mask": sigmoid_focal_loss(
+                src_masks, target_masks, num_boxes, valid=valid
+            ),
+            "loss_dice": dice_loss(src_masks, target_masks, num_boxes, valid=valid),
         }
         return losses
 
@@ -284,6 +291,7 @@ class SetCriterion(nn.Module):
     def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
         loss_map = {
             "labels": self.loss_labels,
+            "class_error": self.loss_class_error,
             "cardinality": self.loss_cardinality,
             "boxes": self.loss_boxes,
             "masks": self.loss_masks,

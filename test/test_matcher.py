@@ -1,5 +1,6 @@
 """Matcher model tests."""
 
+import pytest
 import torch
 
 from detr.models.matcher import HungarianMatcher
@@ -7,14 +8,28 @@ from detr.models.matcher import HungarianMatcher
 from ._aux import indices_torch2python
 
 
-def test_hungarian():
+@pytest.fixture
+def matcher_data():
+    """Shared arrange data for Hungarian matcher tests."""
     n_queries, n_targets, n_classes = 100, 15, 91
     logits = torch.rand(1, n_queries, n_classes + 1)
     boxes = torch.rand(1, n_queries, 4)
     tgt_labels = torch.randint(high=n_classes, size=(n_targets,))
     tgt_boxes = torch.rand(n_targets, 4)
+    return logits, boxes, [{"labels": tgt_labels, "boxes": tgt_boxes}]
+
+
+def test_hungarian_single_batch(matcher_data):
+    logits, boxes, targets = matcher_data
     matcher = HungarianMatcher()
-    targets = [{"labels": tgt_labels, "boxes": tgt_boxes}]
+    indices = matcher({"pred_logits": logits, "pred_boxes": boxes}, targets)
+    assert len(indices[0][0]) == len(targets[0]["labels"])
+    assert len(indices[0][1]) == len(targets[0]["labels"])
+
+
+def test_hungarian_batched_consistency(matcher_data):
+    logits, boxes, targets = matcher_data
+    matcher = HungarianMatcher()
     indices_single = matcher({"pred_logits": logits, "pred_boxes": boxes}, targets)
     indices_batched = matcher(
         {
@@ -23,8 +38,6 @@ def test_hungarian():
         },
         targets * 2,
     )
-    assert len(indices_single[0][0]) == n_targets
-    assert len(indices_single[0][1]) == n_targets
     assert indices_torch2python(indices_single) == indices_torch2python(
         [indices_batched[0]]
     )
@@ -32,23 +45,33 @@ def test_hungarian():
         [indices_batched[1]]
     )
 
-    # test with empty targets
-    tgt_labels_empty = torch.randint(high=n_classes, size=(0,))
-    tgt_boxes_empty = torch.rand(0, 4)
-    targets_empty = [{"labels": tgt_labels_empty, "boxes": tgt_boxes_empty}]
+
+@pytest.mark.parametrize(
+    "target_counts,empty_idx",
+    [
+        ([15, 0], 1),  # mixed: first has targets, second is empty
+        ([0, 0], None),  # all empty
+    ],
+)
+def test_hungarian_empty_targets(matcher_data, target_counts, empty_idx):
+    logits, boxes, _ = matcher_data
+    n_classes = logits.shape[-1] - 1
+    targets = []
+    for count in target_counts:
+        labels = torch.randint(high=n_classes, size=(count,))
+        bboxes = torch.rand(count, 4)
+        targets.append({"labels": labels, "boxes": bboxes})
+
+    matcher = HungarianMatcher()
     indices = matcher(
         {
-            "pred_logits": logits.repeat(2, 1, 1),
-            "pred_boxes": boxes.repeat(2, 1, 1),
+            "pred_logits": logits.repeat(len(target_counts), 1, 1),
+            "pred_boxes": boxes.repeat(len(target_counts), 1, 1),
         },
-        targets + targets_empty,
+        targets,
     )
-    assert len(indices[1][0]) == 0
-    indices = matcher(
-        {
-            "pred_logits": logits.repeat(2, 1, 1),
-            "pred_boxes": boxes.repeat(2, 1, 1),
-        },
-        targets_empty * 2,
-    )
-    assert len(indices[0][0]) == 0
+    if empty_idx is not None:
+        assert len(indices[empty_idx][0]) == 0
+    else:
+        for idx in range(len(target_counts)):
+            assert len(indices[idx][0]) == 0
