@@ -2,7 +2,13 @@
 
 A trimmed fork of [facebookresearch/detr](https://github.com/facebookresearch/detr) focused on **fine-tuning a pretrained DETR checkpoint on a custom COCO-format dataset**. The original distributed-training, panoptic-segmentation, ONNX-export, and Detectron2 code paths have been removed; what remains is a small, dependency-light core built on top of `torchvision.transforms.v2`.
 
-For background on the model, see *End-to-End Object Detection with Transformers* (Carion et al., 2020).
+## What is DETR?
+
+DETR (**D**etection **T**ransformer) is an end-to-end object-detection model that treats detection as a direct set-prediction problem. A CNN backbone extracts image features, which are flattened and enriched with positional encodings. A Transformer encoder–decoder then reasons globally over the feature map and produces a fixed set of *object queries*. Each query is decoded into a bounding box and a class label. A bipartite matching loss (Hungarian algorithm) pairs predicted boxes with ground-truth annotations, eliminating the need for hand-designed anchors or NMS post-processing.
+
+![DETR architecture](.github/detr_architecture.png)
+
+For a more detailed explanation of the model, see *End-to-End Object Detection with Transformers* (Carion et al., 2020).
 
 ## Installation
 
