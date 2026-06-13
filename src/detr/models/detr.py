@@ -134,7 +134,9 @@ class SetCriterion(nn.Module):
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
-            losses["class_error"] = 100 - _accuracy(src_logits[idx], target_classes_o)[0]
+            losses["class_error"] = (
+                100 - _accuracy(src_logits[idx], target_classes_o)[0]
+            )
         return losses
 
     @torch.no_grad()
@@ -338,6 +340,7 @@ class MLP(nn.Module):
         for i, layer in enumerate(self.layers):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
+
 
 @torch.no_grad()
 def _accuracy(output, target, topk=(1,)):

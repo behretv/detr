@@ -155,7 +155,6 @@ def factory(
 def load_from_file(
     file: Path,
     device: str,
-    transforms: list[v2.Transform] | None = None,
 ) -> Bundle:
     """Reconstruct a ``Bundle`` from a ``.pth`` file written by ``export()``.
 
@@ -166,9 +165,6 @@ def load_from_file(
     device:
         Override the device stored in the checkpoint. Defaults to the
         value recorded at export time, or auto-detects CUDA when absent.
-    transforms:
-        Transforms to attach to the bundle. Defaults to an empty list if
-        not provided (they are not stored in the checkpoint).
     """
     logger.info(f"Loading model from {file}")
     model_data = torch.load(file, map_location=device, weights_only=False)

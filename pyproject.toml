@@ -10,10 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "cython",
+    "loguru",
+    "scipy",
     "submitit",
     "torch>=2.0.0",
     "torchvision>=0.15.0",
-    "scipy",
 ]
 
 [project.optional-dependencies]

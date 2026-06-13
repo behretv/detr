@@ -1,4 +1,8 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+"""
+Created on 2026-06-13
+Copyright (c) 2026 Munich University of Applied Sciences
+"""
+
 import torch
 from torch import Tensor, nn
 from torchvision.ops import box_convert
