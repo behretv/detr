@@ -22,3 +22,9 @@ lint:
 		ghcr.io/astral-sh/ruff:0.15.17 \
 		check
 
+
+.PHONY: install-hooks
+install-hooks:
+	@echo "make format && make lint" > .git/hooks/pre-commit
+	@echo "make test" > .git/hooks/pre-push
+	@chmod +x .git/hooks/pre-commit .git/hooks/pre-push
