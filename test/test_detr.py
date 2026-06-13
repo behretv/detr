@@ -9,7 +9,7 @@ from ._aux import detr_resnet50
 
 
 def test_model_script_detection():
-    model = detr_resnet50(pretrained=False).eval()
+    model = detr_resnet50().eval()
     scripted_model = torch.jit.script(model)
     x = nested_tensor_from_tensor_list(
         [torch.rand(3, 200, 200), torch.rand(3, 200, 250)]
@@ -21,7 +21,7 @@ def test_model_script_detection():
 
 
 def test_model_detection_different_inputs():
-    model = detr_resnet50(pretrained=False).eval()
+    model = detr_resnet50().eval()
     # support NestedTensor
     x = nested_tensor_from_tensor_list(
         [torch.rand(3, 200, 200), torch.rand(3, 200, 250)]
@@ -48,7 +48,7 @@ def test_wrapped_model_script_detection():
             sample = nested_tensor_from_tensor_list(inputs)
             return self.model(sample)
 
-    model = detr_resnet50(pretrained=False)
+    model = detr_resnet50()
     wrapped_model = WrappedDETR(model)
     wrapped_model.eval()
     scripted_model = torch.jit.script(wrapped_model)

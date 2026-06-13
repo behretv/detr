@@ -7,7 +7,7 @@ from detr.models.transformer import Transformer
 from detr.parameters import BackboneType
 
 
-def detr_resnet50(pretrained=False):
+def detr_resnet50():
     hidden_dim = 256
     backbone = Backbone(
         BackboneType.RESNET50,

@@ -36,7 +36,7 @@ def model_bundle(device):
         loss_params=detr.parameters.Loss(),
         train_params=detr.parameters.Train(),
     )
-    bundle.set_device("cpu")
+    bundle.set_device(str(device))
     return bundle
 
 
