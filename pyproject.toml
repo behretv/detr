@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "cython",
     "loguru",
+    "pycocotools",
     "scipy",
     "submitit",
     "torch>=2.0.0",
@@ -18,8 +19,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-coco = ["pycocotools"]
-panoptic = ["panopticapi @ git+https://github.com/cocodataset/panopticapi.git"]
 dev = ["flake8"]
 
 [project.scripts]
@@ -30,10 +29,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-filterwarnings = [
-    "ignore:`isinstance\\(treespec, LeafSpec\\)` is deprecated:FutureWarning",
-]
 
 [tool.flake8]
-max-line-length = 120
-ignore = ["F401", "E402", "F403", "W503", "W504"]
+max-line-length = 88
+ignore = []

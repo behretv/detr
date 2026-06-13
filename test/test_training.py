@@ -10,7 +10,6 @@ from detr.transforms import default as test_transforms
 from detr.transforms import train as train_transforms
 
 
-
 def _make_target(n_boxes: int = 3) -> dict:
     boxes = torch.rand(n_boxes, 4)
     boxes[:, 2:] = boxes[:, :2] + boxes[:, 2:].abs().clamp(min=0.05)

@@ -3,6 +3,7 @@ test:
 	docker run --tty --rm \
 		-v .:/app \
 		-w /app \
+		--user ubuntu \
 		hmcvlab/computer-vision:latest \
 		bash -c "pip install -e . && python -m pytest test/"
 

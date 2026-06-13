@@ -8,7 +8,6 @@ import torch
 import detr
 
 
-
 def test_dataset_length(coco_root):
     ds = detr.dataset.CocoDetection(
         coco_root,
