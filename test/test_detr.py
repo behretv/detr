@@ -82,3 +82,51 @@ def test_train_eval_mode_outputs_differ():
     # train mode is stochastic: two forward passes give different results
     out_train_2 = model(x)
     assert not out_train_1["pred_logits"].equal(out_train_2["pred_logits"])
+
+
+def test_predict_matches_torchvision_format():
+    """DETR.predict() must return the same structure as torchvision detection models."""
+    from torchvision.models.detection import fasterrcnn_resnet50_fpn
+
+    images = [torch.rand(3, 200, 200), torch.rand(3, 250, 180)]
+
+    # DETR predict
+    detr_model = detr_resnet50()
+    detr_out = detr_model.predict(images, score_threshold=0.0)
+
+    # Faster R-CNN eval (random weights, no download)
+    rcnn = fasterrcnn_resnet50_fpn(weights=None)
+    rcnn.eval()
+    rcnn_out = rcnn(images)
+
+    # Both return List[Dict[str, Tensor]]
+    assert isinstance(detr_out, list)
+    assert isinstance(rcnn_out, list)
+    assert len(detr_out) == len(images)
+    assert len(rcnn_out) == len(images)
+
+    # Same keys
+    for d in detr_out:
+        assert set(d.keys()) == {"scores", "labels", "boxes"}
+        assert d["boxes"].dim() == 2 and d["boxes"].shape[1] == 4
+        assert d["labels"].dim() == 1
+        assert d["scores"].dim() == 1
+        assert d["labels"].shape[0] == d["boxes"].shape[0] == d["scores"].shape[0]
+
+    for r in rcnn_out:
+        assert set(r.keys()) == {"scores", "labels", "boxes"}
+        assert r["boxes"].dim() == 2 and r["boxes"].shape[1] == 4
+        assert r["labels"].dim() == 1
+        assert r["scores"].dim() == 1
+        assert r["labels"].shape[0] == r["boxes"].shape[0] == r["scores"].shape[0]
+
+    # DETR boxes should be absolute (larger than 1 for 200x200 images)
+    for d in detr_out:
+        if d["boxes"].numel():
+            assert d["boxes"].max() > 1.0
+
+    # Score threshold should filter DETR results
+    detr_filtered = detr_model.predict(images, score_threshold=0.99)
+    for d in detr_filtered:
+        if d["scores"].numel():
+            assert d["scores"].min() > 0.99

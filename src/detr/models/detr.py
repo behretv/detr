@@ -80,6 +80,55 @@ class DETR(nn.Module):
             for a, b in zip(outputs_class[:-1], outputs_coord[:-1])
         ]
 
+    @torch.no_grad()
+    def predict(
+        self,
+        samples,
+        target_sizes: torch.Tensor | None = None,
+        score_threshold: float = 0.0,
+    ) -> list[dict[str, torch.Tensor]]:
+        """Run inference and return torchvision-compatible predictions.
+
+        Parameters:
+            samples: list of ``Tensor[C, H, W]``, a batch ``Tensor[B, C, H, W]``,
+                     or a ``NestedTensor``.
+            target_sizes: optional ``Tensor[N, 2]`` of ``(height, width)`` for each
+                          image. If ``None``, inferred from ``samples``.
+            score_threshold: minimum confidence score to keep a detection.
+
+        Returns:
+            List of dicts (one per image) with keys ``scores``, ``labels``, ``boxes``.
+            ``boxes`` are in absolute ``xyxy`` coordinates.
+        """
+        self.eval()
+        outputs = self(samples)
+
+        if target_sizes is None:
+            if isinstance(samples, list):
+                target_sizes = torch.tensor(
+                    [list(img.shape[-2:]) for img in samples],
+                    dtype=torch.long,
+                    device=outputs["pred_logits"].device,
+                )
+            elif isinstance(samples, torch.Tensor):
+                _b, _c, h, w = samples.shape
+                target_sizes = torch.tensor(
+                    [[h, w]] * _b,
+                    dtype=torch.long,
+                    device=outputs["pred_logits"].device,
+                )
+            else:
+                # NestedTensor — infer from mask (non-padded region)
+                mask = samples.mask  # [B, H, W]
+                h = (~mask).sum(1).max(1)[0]
+                w = (~mask).sum(2).max(1)[0]
+                target_sizes = torch.stack([h, w], dim=1).to(
+                    outputs["pred_logits"].device
+                )
+
+        postprocessor = PostProcess(score_threshold=score_threshold)
+        return postprocessor(outputs, target_sizes)
+
 
 class SetCriterion(nn.Module):
     """This class computes the loss for DETR.
@@ -284,11 +333,20 @@ class SetCriterion(nn.Module):
 
 
 class PostProcess(nn.Module):
-    """This module converts the model's output into the format expected by the coco api"""
+    """Convert DETR raw outputs to the torchvision detection format.
+
+    Returns a list of dicts (one per image) with keys ``scores``, ``labels``,
+    and ``boxes`` — identical to the eval-mode output of
+    ``torchvision.models.detection`` models (e.g. Faster R-CNN).
+    """
+
+    def __init__(self, score_threshold: float = 0.0):
+        super().__init__()
+        self.score_threshold = score_threshold
 
     @torch.no_grad()
     def forward(self, outputs, target_sizes):
-        """Perform the computation
+        """Perform the computation.
         Parameters:
             outputs: raw outputs of the model
             target_sizes: tensor of dimension [batch_size x 2] containing the size of each images of the batch
@@ -317,10 +375,16 @@ class PostProcess(nn.Module):
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]
 
-        results = [
-            {"scores": score, "labels": label, "boxes": box}
-            for score, label, box in zip(scores, labels, boxes)
-        ]
+        results: list[dict[str, torch.Tensor]] = []
+        for score, label, box in zip(scores, labels, boxes):
+            keep = score > self.score_threshold
+            results.append(
+                {
+                    "scores": score[keep],
+                    "labels": label[keep],
+                    "boxes": box[keep],
+                }
+            )
 
         return results
 
