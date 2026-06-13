@@ -4,7 +4,7 @@ test:
 		-v .:/app \
 		-w /app \
 		--user ubuntu \
-		hmcvlab/computer-vision:latest \
+		hmcvlab/detr:latest \
 		bash -c "pip install -e . && python -m pytest test/"
 
 .PHONY: format
@@ -23,6 +23,13 @@ lint:
 		ghcr.io/astral-sh/ruff:0.15.17 \
 		check
 
+.PHONY: docker
+docker:
+	@echo "FROM hmcvlab/computer-vision:latest" > Dockerfile
+	@echo "COPY . ." >> Dockerfile
+	@echo "RUN pip install -e ." >> Dockerfile
+	docker build -t hmcvlab/detr:latest .
+	rm Dockerfile
 
 .PHONY: install-hooks
 install-hooks:

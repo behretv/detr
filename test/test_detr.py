@@ -57,3 +57,28 @@ def test_wrapped_model_script_detection():
     out_script = scripted_model(x)
     assert out["pred_logits"].equal(out_script["pred_logits"])
     assert out["pred_boxes"].equal(out_script["pred_boxes"])
+
+
+def test_train_eval_mode_outputs_differ():
+    """Dropout is active in train mode, so outputs must differ from eval mode."""
+    torch.manual_seed(42)
+    model = detr_resnet50()
+    x = nested_tensor_from_tensor_list(
+        [torch.rand(3, 200, 200), torch.rand(3, 200, 250)]
+    )
+
+    # eval mode is deterministic
+    model.eval()
+    out_eval_1 = model(x)
+    out_eval_2 = model(x)
+    assert out_eval_1["pred_logits"].equal(out_eval_2["pred_logits"])
+    assert out_eval_1["pred_boxes"].equal(out_eval_2["pred_boxes"])
+
+    # train mode differs from eval because dropout is active
+    model.train()
+    out_train_1 = model(x)
+    assert not out_eval_1["pred_logits"].equal(out_train_1["pred_logits"])
+
+    # train mode is stochastic: two forward passes give different results
+    out_train_2 = model(x)
+    assert not out_train_1["pred_logits"].equal(out_train_2["pred_logits"])
