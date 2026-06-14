@@ -7,5 +7,8 @@ from detr.parameters import BackboneType
 
 
 def test_backbone_script():
+    # Arrange
     backbone = Backbone(BackboneType.RESNET50, True, False, False)
+
+    # Act + Assert (should not raise)
     torch.jit.script(backbone)  # noqa

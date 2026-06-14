@@ -20,16 +20,24 @@ def matcher_data():
 
 
 def test_hungarian_single_batch(matcher_data):
+    # Arrange
     logits, boxes, targets = matcher_data
     matcher = HungarianMatcher()
+
+    # Act
     indices = matcher({"pred_logits": logits, "pred_boxes": boxes}, targets)
+
+    # Assert
     assert len(indices[0][0]) == len(targets[0]["labels"])
     assert len(indices[0][1]) == len(targets[0]["labels"])
 
 
 def test_hungarian_batched_consistency(matcher_data):
+    # Arrange
     logits, boxes, targets = matcher_data
     matcher = HungarianMatcher()
+
+    # Act
     indices_single = matcher({"pred_logits": logits, "pred_boxes": boxes}, targets)
     indices_batched = matcher(
         {
@@ -38,6 +46,8 @@ def test_hungarian_batched_consistency(matcher_data):
         },
         targets * 2,
     )
+
+    # Assert
     assert indices_torch2python(indices_single) == indices_torch2python(
         [indices_batched[0]]
     )
@@ -46,32 +56,41 @@ def test_hungarian_batched_consistency(matcher_data):
     )
 
 
-@pytest.mark.parametrize(
-    "target_counts,empty_idx",
-    [
-        ([15, 0], 1),  # mixed: first has targets, second is empty
-        ([0, 0], None),  # all empty
-    ],
-)
-def test_hungarian_empty_targets(matcher_data, target_counts, empty_idx):
-    logits, boxes, _ = matcher_data
-    n_classes = logits.shape[-1] - 1
-    targets = []
-    for count in target_counts:
-        labels = torch.randint(high=n_classes, size=(count,))
-        bboxes = torch.rand(count, 4)
-        targets.append({"labels": labels, "boxes": bboxes})
-
+def test_hungarian_mixed_empty_targets(matcher_data):
+    """Second batch item has no targets; its matching should be empty."""
+    # Arrange
+    logits, boxes, targets_with = matcher_data
+    targets = targets_with + [
+        {"labels": torch.empty(0, dtype=torch.int64), "boxes": torch.empty(0, 4)}
+    ]
     matcher = HungarianMatcher()
+
+    # Act
     indices = matcher(
-        {
-            "pred_logits": logits.repeat(len(target_counts), 1, 1),
-            "pred_boxes": boxes.repeat(len(target_counts), 1, 1),
-        },
+        {"pred_logits": logits.repeat(2, 1, 1), "pred_boxes": boxes.repeat(2, 1, 1)},
         targets,
     )
-    if empty_idx is not None:
-        assert len(indices[empty_idx][0]) == 0
-    else:
-        for idx in range(len(target_counts)):
-            assert len(indices[idx][0]) == 0
+
+    # Assert
+    assert len(indices[1][0]) == 0
+
+
+def test_hungarian_all_targets_empty(matcher_data):
+    """All batch items have no targets; every matching should be empty."""
+    # Arrange
+    logits, boxes, _ = matcher_data
+    targets = [
+        {"labels": torch.empty(0, dtype=torch.int64), "boxes": torch.empty(0, 4)}
+        for _ in range(2)
+    ]
+    matcher = HungarianMatcher()
+
+    # Act
+    indices = matcher(
+        {"pred_logits": logits.repeat(2, 1, 1), "pred_boxes": boxes.repeat(2, 1, 1)},
+        targets,
+    )
+
+    # Assert
+    assert len(indices[0][0]) == 0
+    assert len(indices[1][0]) == 0

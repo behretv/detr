@@ -42,17 +42,27 @@ def _make_tv_target(n_boxes: int = 3, h: int = 100, w: int = 100) -> dict:
 
 
 def test_train_transforms():
-    img_out, target_out = train_transforms()(
-        _make_pil(300, 400), _make_tv_target(h=300, w=400)
-    )
+    # Arrange
+    img = _make_pil(300, 400)
+    target = _make_tv_target(h=300, w=400)
+
+    # Act
+    img_out, target_out = train_transforms()(img, target)
+
+    # Assert
     assert isinstance(img_out, torch.Tensor)
     assert "boxes" in target_out
 
 
 def test_test_transforms():
-    img_out, target_out = test_transforms()(
-        _make_pil(300, 400), _make_tv_target(h=300, w=400)
-    )
+    # Arrange
+    img = _make_pil(300, 400)
+    target = _make_tv_target(h=300, w=400)
+
+    # Act
+    img_out, target_out = test_transforms()(img, target)
+
+    # Assert
     assert isinstance(img_out, torch.Tensor)
     # Boxes must end up normalised (cxcywh in [0, 1]).
     assert (target_out["boxes"] >= 0).all()
@@ -65,12 +75,17 @@ def test_test_transforms():
 
 
 def test_forward_pass_shapes(model_bundle, train_loader, device):
+    # Arrange
     model_bundle.ai_model.eval()
     samples, _ = next(iter(train_loader))
     samples = samples.to(device)
+
+    # Act
     with torch.no_grad():
         out = model_bundle.ai_model(samples)
     bs = samples.tensors.shape[0]
+
+    # Assert
     assert "pred_logits" in out
     assert "pred_boxes" in out
     assert out["pred_logits"].shape[0] == bs
@@ -78,18 +93,26 @@ def test_forward_pass_shapes(model_bundle, train_loader, device):
 
 
 def test_loss_is_finite(model_bundle, train_loader, device):
+    # Arrange
     model_bundle.ai_model.train()
     model_bundle.criterion.train()
     samples, targets = next(iter(train_loader))
     samples = samples.to(device)
     targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+    # Act
     loss_dict = model_bundle.criterion(model_bundle.ai_model(samples), targets)
+
+    # Assert
     for name, val in loss_dict.items():
         assert torch.isfinite(val), f"loss '{name}' is not finite: {val}"
 
 
 def test_train_one_epoch_runs(model_bundle, train_loader, device):
+    # Arrange
     optimizer = torch.optim.AdamW(model_bundle.ai_model.parameters(), lr=1e-4)
+
+    # Act
     stats = train_one_epoch(
         model_bundle.ai_model,
         model_bundle.criterion,
@@ -99,6 +122,8 @@ def test_train_one_epoch_runs(model_bundle, train_loader, device):
         epoch=0,
         max_norm=0.1,
     )
+
+    # Assert
     assert "loss_bbox" in stats
     assert torch.isfinite(torch.tensor(stats["loss_bbox"])), (
         f"training loss is not finite: {stats['loss_bbox']}"
@@ -106,6 +131,7 @@ def test_train_one_epoch_runs(model_bundle, train_loader, device):
 
 
 def test_evaluate_runs(model_bundle, coco_root, device):
+    # Arrange
     ds = CocoDetection(
         coco_root,
         coco_root / "valid.coco.json",
@@ -115,6 +141,10 @@ def test_evaluate_runs(model_bundle, coco_root, device):
     loader = torch.utils.data.DataLoader(
         ds, batch_size=2, collate_fn=collate_fn, num_workers=0
     )
+
+    # Act
     outputs = detr.coco.inference(model_bundle, loader, device)
     stats = detr.coco.run_eval(coco_root / "valid.coco.json", outputs, iou_type="bbox")
+
+    # Assert
     assert "ap_mean" in stats

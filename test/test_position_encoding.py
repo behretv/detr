@@ -9,5 +9,8 @@ from detr.models.position_encoding import (
 
 
 def test_position_encoding_script():
+    # Arrange
     m1, m2 = PositionEmbeddingSine(), PositionEmbeddingLearned()
+
+    # Act + Assert (should not raise)
     torch.jit.script(m1), torch.jit.script(m2)  # noqa
