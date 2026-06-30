@@ -247,7 +247,7 @@ def sigmoid_focal_loss(
         loss = alpha_t * loss
 
     if valid is not None:
-        loss = loss * valid
+        loss = loss * valid.flatten(1).float()
         return loss.sum() / num_boxes
 
     return loss.mean(1).sum() / num_boxes

@@ -251,7 +251,7 @@ class SetCriterion(nn.Module):
         target_masks, valid = nested_tensor_from_tensor_list(masks).decompose()
         target_masks = target_masks.to(src_masks)
         target_masks = target_masks[tgt_idx]
-        valid = valid.to(src_masks.device)[tgt_idx]
+        valid = valid.to(src_masks.device)[tgt_idx[0]]
 
         # upsample predictions to the target size
         src_masks = F.interpolate(
