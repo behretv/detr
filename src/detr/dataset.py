@@ -36,7 +36,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         return img, target
 
 
-def load_dataset(
+def load(
     ann_file: Path,
     transforms: v2.Compose,
     return_masks: bool = False,

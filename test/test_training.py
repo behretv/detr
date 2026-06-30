@@ -7,7 +7,7 @@ from detr.aux import collate_fn
 from detr.dataset import CocoDetection
 from detr.train import train_one_epoch
 from detr.transforms import default as test_transforms
-from detr.transforms import train as train_transforms
+from detr.transforms import augmentation as train_transforms
 
 
 def _make_target(n_boxes: int = 3) -> dict:

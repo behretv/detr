@@ -12,27 +12,23 @@ import torch
 from loguru import logger
 
 import detr
-import detr.parameters as parameters
-import detr.train as train
-from detr.transforms import default as test_transforms
-from detr.transforms import train as train_transforms
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser("Set transformer detector", add_help=False)
-    parameters.add_args(parser, parameters.Train)
-    parameters.add_args(parser, parameters.Model)
-    parameters.add_args(parser, parameters.Loss)
-    parameters.add_args(parser, parameters.Augmentation)
+    detr.parameters.add_args(parser, detr.parameters.Train)
+    detr.parameters.add_args(parser, detr.parameters.Model)
+    detr.parameters.add_args(parser, detr.parameters.Loss)
+    detr.parameters.add_args(parser, detr.parameters.Augmentation)
     return parser
 
 
 def main(args):
-    train_params = parameters.Train.from_args(args)
-    model_params = parameters.Model.from_args(args)
-    aug_params = parameters.Augmentation.from_args(args)
+    train_params = detr.parameters.Train.from_args(args)
+    model_params = detr.parameters.Model.from_args(args)
+    aug_params = detr.parameters.Augmentation.from_args(args)
 
     # fix the seed for reproducibility
     torch.manual_seed(train_params.seed)
@@ -46,24 +42,24 @@ def main(args):
     v_file = Path(args.dataset) / "valid.coco.json"
     h_file = Path(args.dataset) / "holdout.coco.json"
 
-    t_transforms = train_transforms(aug_params)
-    v_transforms = test_transforms(aug_params)
+    t_transforms = detr.transforms.augmentation(aug_params)
+    v_transforms = detr.transforms.default()
 
-    t_loader = detr.dataset.load_dataset(
+    t_loader = detr.dataset.load(
         t_file,
         t_transforms,
         return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
-    v_loader = detr.dataset.load_dataset(
+    v_loader = detr.dataset.load(
         v_file,
         v_transforms,
         return_masks=model_params.masks,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
-    h_loader = detr.dataset.load_dataset(
+    h_loader = detr.dataset.load(
         h_file,
         v_transforms,
         return_masks=model_params.masks,
@@ -72,7 +68,7 @@ def main(args):
     )
 
     bundle.set_device(DEVICE)
-    bundle = train.run(
+    bundle = detr.train.run(
         bundle,
         t_loader,
         v_loader,

@@ -13,7 +13,7 @@ def test_dataset_length(coco_root):
     ds = detr.dataset.CocoDetection(
         coco_root,
         coco_root / "train.coco.json",
-        transforms=detr.transforms.train(),
+        transforms=detr.transforms.augmentation(),
         return_masks=False,
     )
     length = len(ds)

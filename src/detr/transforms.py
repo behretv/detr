@@ -96,7 +96,7 @@ def _make_tail(params: Augmentation) -> list[v2.Transform]:
     ]
 
 
-def train(params: Augmentation | None = None) -> v2.Compose:
+def augmentation(params: Augmentation | None = None) -> v2.Compose:
     """Build the training COCO pipeline."""
     params = params or Augmentation()
     return v2.Compose(
