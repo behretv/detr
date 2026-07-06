@@ -57,7 +57,7 @@ def inference(
 
     # Add name to results
     df = pd.DataFrame(results)
-    df["name"] = df["category_id"].map(model_data.cats)
+    df["name"] = df["category_id"].map(dict(enumerate(model_data.meta.categories)))
     results = df.to_dict("records")
     return results
 
@@ -78,7 +78,7 @@ def run_eval(file_holdout: Path, results: list[dict], iou_type: str) -> dict:
     coco_eval.summarize()
 
     # Convert stats to dict
-    stats = list(coco_eval.stats.round(3))
+    stats = list(coco_eval.stats.round(3).astype(float))
     return {
         "ap_mean": stats[0],
         "ap_50": stats[1],

@@ -20,7 +20,6 @@ import torch
 from loguru import logger
 
 import detr
-from detr._types import ModelType
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -31,7 +30,7 @@ def main(args: argparse.Namespace):
     loss_params = detr.parameters.Loss.from_args(args)
     aug_params = detr.parameters.Augmentation.from_args(args)
 
-    if model_params.model_type is not ModelType.DETR_SEGM:
+    if model_params.model_type is not detr.ModelType.DETR_SEGM:
         raise ValueError("model_type must be DETR_SEGM for segmentation training")
 
     torch.manual_seed(train_params.seed)
@@ -43,7 +42,8 @@ def main(args: argparse.Namespace):
         model_params.frozen = True
 
     # Build model with segmentation head
-    bundle = detr.model.factory(model_params, loss_params, train_params)
+    categories = detr.dataset.categories(args.file_train)
+    bundle = detr.model.factory(model_params, loss_params, train_params, categories)
     bundle.set_device(DEVICE)
 
     # Load pretrained detector weights into the DETR sub-module
@@ -119,5 +119,5 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--file-train", type=Path, required=True)
     args = parser.parse_args()
-    args.model_type = ModelType.DETR_SEGM  # force segmentation for this script
+    args.model_type = detr.ModelType.DETR_SEGM  # force segmentation for this script
     main(args)

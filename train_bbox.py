@@ -35,7 +35,8 @@ def main(args):
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    bundle = detr.model.load_from_file(args.model, device=DEVICE)
+    categories = detr.dataset.categories(args.file_train)
+    bundle = detr.model.load_from_file(args.model, device=DEVICE, categories=categories)
     logger.info(f"Training parameters: {bundle.train_params}")
 
     t_file = args.file_train

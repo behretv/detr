@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 import torch
 import torch.nn as nn
-import torchvision.transforms.v2 as v2
 from loguru import logger
 
 import detr
 import detr.parameters as parameters
-from detr._types import ModelType
+from detr._types import ModelMeta, ModelType
 from detr.models.backbone import build_backbone
 from detr.models.detr import DETR, PostProcess, SetCriterion
 from detr.models.matcher import build_matcher
@@ -33,10 +31,7 @@ class Bundle:
     loss_params   : ``parameters.Loss`` used to build the criterion.
     train_params  : ``parameters.Train`` used during training.
     name          : human-readable name for this run / experiment.
-    source        : origin of the weights (e.g. a file path or URL).
-    transforms    : inference / validation transforms applied to inputs.
-    cats          : mapping from COCO category id → category name.
-    logs          : list of per-epoch stat dicts appended during training.
+    meta          : ``ModelMeta`` with categories, model/subtype, train_info, transforms, source.
     """
 
     ai_model: nn.Module
@@ -46,13 +41,10 @@ class Bundle:
     loss_params: parameters.Loss
     train_params: parameters.Train
     name: str = ""
-    source: str = ""
-    transforms: list[v2.Transform] = field(default_factory=list)
-    cats: dict[int, str] = field(default_factory=dict)
-    logs: list[dict[str, Any]] = field(default_factory=list)
+    meta: ModelMeta = field(default_factory=ModelMeta)
 
     def __post_init__(self):
-        self.name = self.name or f"detr_{self.model_params.backbone.value}"
+        self.name = self.name or f"detr_{self.meta.subtype.value}"
 
         n_parameters = sum(
             p.numel() for p in self.ai_model.parameters() if p.requires_grad
@@ -73,6 +65,7 @@ class Bundle:
             raise FileExistsError(f"File {file} already exists!")
 
         logger.info(f"Exporting bundle to {file}")
+        self.meta.train_info["params"] = asdict(self.train_params)
         torch.save(
             {
                 "state_dict": self.ai_model.state_dict(),
@@ -80,20 +73,28 @@ class Bundle:
                 "loss_params": asdict(self.loss_params),
                 "train_params": asdict(self.train_params),
                 "name": self.name,
-                "source": self.source,
-                "transforms": self.transforms,
-                "cats": self.cats,
+                "meta": {
+                    "categories": self.meta.categories,
+                    "model_type": self.meta.model_type,
+                    "subtype": self.meta.subtype,
+                    "train_info": self.meta.train_info,
+                    "transforms": self.meta.transforms,
+                    "source": self.meta.source,
+                },
             },
             Path(file).with_suffix(".pth"),
         )
 
-        pd.DataFrame(self.logs).to_csv(Path(file).with_suffix(".csv"), index=False)
+        pd.DataFrame(self.meta.train_info["logs"]).to_csv(
+            Path(file).with_suffix(".csv"), index=False
+        )
 
 
 def factory(
     model_params: parameters.Model,
     loss_params: parameters.Loss,
     train_params: parameters.Train,
+    categories: list[str],
 ) -> Bundle:
     # the `num_classes` naming here is somewhat misleading.
     # it indeed corresponds to `max_obj_id + 1`, where max_obj_id
@@ -103,7 +104,7 @@ def factory(
     # you should pass `num_classes` to be 2 (max_obj_id + 1).
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
-    num_classes = 91
+    num_classes = len(categories)
 
     backbone = build_backbone(model_params, train_params)
     transformer = build_transformer(model_params)
@@ -144,6 +145,12 @@ def factory(
     if model_params.model_type is ModelType.DETR_SEGM:
         postprocessors["segm"] = PostProcessSegm()
 
+    meta = ModelMeta(
+        model_type=model_params.model_type,
+        subtype=model_params.backbone,
+        categories=categories,
+    )
+
     return Bundle(
         ai_model=model,
         criterion=criterion,
@@ -151,12 +158,14 @@ def factory(
         model_params=model_params,
         loss_params=loss_params,
         train_params=train_params,
+        meta=meta,
     )
 
 
 def load_from_file(
     file: Path,
     device: str,
+    categories: list[str],
 ) -> Bundle:
     """Reconstruct a ``Bundle`` from a ``.pth`` file written by ``export()``.
 
@@ -175,15 +184,40 @@ def load_from_file(
     loss_params: parameters.Loss = model_data.get("loss_params", parameters.Loss())
     train_params: parameters.Train = model_data.get("train_params", parameters.Train())
 
-    bundle = factory(model_params, loss_params, train_params)
+    bundle = factory(model_params, loss_params, train_params, categories)
 
     state_dict = model_data.get("state_dict") or model_data.get("model")
     if state_dict is None:
         raise KeyError(f"Checkpoint {file} has neither 'state_dict' nor 'model' key")
-    bundle.ai_model.load_state_dict(state_dict)
 
-    bundle.source = str(file)
-    bundle.transforms = model_data.get("transforms", detr.transforms.default())
+    model_state = bundle.ai_model.state_dict()
+    incompatible = {
+        k for k, v in state_dict.items()
+        if k in model_state and v.shape != model_state[k].shape
+    }
+    if incompatible:
+        logger.warning(
+            f"Skipping incompatible keys (shape mismatch): {incompatible}"
+        )
+    state_dict = {k: v for k, v in state_dict.items() if k not in incompatible}
+
+    missing, unexpected = bundle.ai_model.load_state_dict(state_dict, strict=False)
+    if missing or unexpected:
+        logger.warning(
+            f"load_state_dict (strict=False) — missing: {missing}, unexpected: {unexpected}"
+        )
+
+    meta_data = model_data.get("meta", {})
+    bundle.meta.source = meta_data.get("source", str(file))
+    bundle.meta.transforms = meta_data.get(
+        "transforms", model_data.get("transforms", detr.transforms.default())
+    )
+    bundle.meta.categories = meta_data.get(
+        "categories", model_data.get("cats", {})
+    )
+    bundle.meta.train_info = meta_data.get(
+        "train_info", {"params": {}, "logs": []}
+    )
     return bundle
 
 

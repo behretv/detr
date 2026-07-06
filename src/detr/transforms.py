@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """DETR transforms / augmentation.
 
 Thin orchestration over ``torchvision.transforms.v2``; the only DETR-specific
@@ -17,7 +16,7 @@ import torchvision.transforms.v2 as v2
 from torchvision import tv_tensors
 from torchvision.ops import box_convert
 
-from detr.parameters import Augmentation
+from detr.augmentation import Augmentation
 
 
 class RandomResize(v2.Transform):

@@ -19,6 +19,12 @@ from torchvision.transforms import v2
 
 from detr.aux import collate_fn
 
+def categories(ann_file: Path) -> list[str]:
+    """Extract category names from a COCO annotation file."""
+    import json
+    with open(ann_file, "r") as f:
+        data = json.load(f)
+    return [cat["name"] for cat in data["categories"]]
 
 class CocoDetection(torchvision.datasets.CocoDetection):
     def __init__(self, img_folder, ann_file, transforms, return_masks):

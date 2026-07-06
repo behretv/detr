@@ -110,7 +110,7 @@ def run(
 
     # Work on a copy so the caller's bundle is not mutated
     new_model = copy.copy(bundle)
-    new_model.logs = list(bundle.logs)
+    new_model.meta.train_info["logs"] = list(bundle.meta.train_info["logs"])
 
     param_dicts = [
         {
@@ -159,7 +159,7 @@ def run(
             **{f"train_{k}": v for k, v in train_stats.items()},
             **{f"val_{k}": v for k, v in val_stats.items()},
         }
-        new_model.logs.append(log_entry)
+        new_model.meta.train_info["logs"].append(log_entry)
 
     elapsed = str(datetime.timedelta(seconds=int(time.time() - start_time)))
     logger.info(f"Training time {elapsed}")
