@@ -3,12 +3,12 @@
 Usage
 -----
     python train_insseg.py \
-        --dataset /data/coco \
-        --frozen-weights output/detector/checkpoint.pth \
-        --output_dir output/segmentation
+        --file-train /data/coco/train.coco.json \
+        --model output/detector/checkpoint.pth \
+        --output-dir output/segmentation
 
 The detector backbone and box head are frozen; only the mask head is trained.
-Omit --frozen-weights to fine-tune the full model end-to-end.
+Omit --model to fine-tune the full model end-to-end.
 """
 
 import argparse
@@ -20,39 +20,44 @@ import torch
 from loguru import logger
 
 import detr
+from detr._types import ModelType
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def main(args):
+def main(args: argparse.Namespace):
     train_params = detr.parameters.Train.from_args(args)
     model_params = detr.parameters.Model.from_args(args)
     loss_params = detr.parameters.Loss.from_args(args)
     aug_params = detr.parameters.Augmentation.from_args(args)
 
-    if not model_params.masks:
-        raise ValueError("--masks must be set for segmentation training")
+    if model_params.model_type is not ModelType.DETR_SEGM:
+        raise ValueError("model_type must be DETR_SEGM for segmentation training")
 
     torch.manual_seed(train_params.seed)
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
+
+    # Freeze DETR backbone if pretrained weights are provided
+    if args.model is not None:
+        model_params.frozen = True
 
     # Build model with segmentation head
     bundle = detr.model.factory(model_params, loss_params, train_params)
     bundle.set_device(DEVICE)
 
     # Load pretrained detector weights into the DETR sub-module
-    if args.frozen_weights is not None:
+    if args.model is not None:
         checkpoint = torch.load(
-            args.frozen_weights, map_location="cpu", weights_only=False
+            args.model, map_location=DEVICE, weights_only=False
         )
         state_dict = checkpoint.get("state_dict", checkpoint.get("model"))
         bundle.ai_model.detr.load_state_dict(state_dict)
-        logger.info(f"Loaded frozen weights from {args.frozen_weights}")
+        logger.info(f"Loaded frozen weights from {args.model}")
 
-    t_file = Path(args.dataset) / "train.coco.json"
-    v_file = Path(args.dataset) / "valid.coco.json"
-    h_file = Path(args.dataset) / "holdout.coco.json"
+    t_file = args.file_train
+    v_file = t_file.with_name(t_file.name.replace("train", "valid"))
+    h_file = t_file.with_name("holdout.coco.json")
 
     t_transforms = detr.transforms.augmentation(aug_params)
     v_transforms = detr.transforms.default(aug_params)
@@ -60,21 +65,21 @@ def main(args):
     t_loader = detr.dataset.load(
         t_file,
         t_transforms,
-        return_masks=model_params.masks,
+        return_masks=True,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     v_loader = detr.dataset.load(
         v_file,
         v_transforms,
-        return_masks=model_params.masks,
+        return_masks=True,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     h_loader = detr.dataset.load(
         h_file,
         v_transforms,
-        return_masks=model_params.masks,
+        return_masks=True,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
@@ -106,13 +111,13 @@ if __name__ == "__main__":
     detr.parameters.add_args(parser, detr.parameters.Loss)
     detr.parameters.add_args(parser, detr.parameters.Augmentation)
     parser.add_argument(
-        "--frozen-weights",
+        "--model",
         type=Path,
         default=None,
         help="Path to pretrained DETR weights to freeze",
     )
     parser.add_argument("--output-dir", type=str, default=None)
-    parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--file-train", type=Path, required=True)
     args = parser.parse_args()
-    args.masks = True  # force masks for this script
+    args.model_type = ModelType.DETR_SEGM  # force segmentation for this script
     main(args)

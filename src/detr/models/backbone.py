@@ -57,7 +57,7 @@ class Backbone(BackboneBase):
 
     def __init__(
         self,
-        name: parameters.BackboneType,
+        name: parameters.ModelSubType,
         train_backbone: bool,
         return_interm_layers: bool,
         dilation: bool,
@@ -92,7 +92,7 @@ class Joiner(nn.Sequential):
 def build_backbone(model_params: parameters.Model, train_params: parameters.Train):
     position_embedding = build_position_encoding(model_params)
     train_backbone = train_params.lr_backbone > 0
-    return_interm_layers = model_params.masks
+    return_interm_layers = model_params.model_type is parameters.ModelType.DETR_SEGM
     backbone = Backbone(
         model_params.backbone,
         train_backbone,

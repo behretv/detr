@@ -38,9 +38,9 @@ def main(args):
     bundle = detr.model.load_from_file(args.model, device=DEVICE)
     logger.info(f"Training parameters: {bundle.train_params}")
 
-    t_file = Path(args.dataset) / "train.coco.json"
-    v_file = Path(args.dataset) / "valid.coco.json"
-    h_file = Path(args.dataset) / "holdout.coco.json"
+    t_file = args.file_train
+    v_file = t_file.with_name(t_file.name.replace("train", "valid"))
+    h_file = t_file.with_name("holdout.coco.json")
 
     t_transforms = detr.transforms.augmentation(aug_params)
     v_transforms = detr.transforms.default()
@@ -48,21 +48,21 @@ def main(args):
     t_loader = detr.dataset.load(
         t_file,
         t_transforms,
-        return_masks=model_params.masks,
+        return_masks=model_params.model_type is detr.ModelType.DETR_SEGM,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     v_loader = detr.dataset.load(
         v_file,
         v_transforms,
-        return_masks=model_params.masks,
+        return_masks=model_params.model_type is detr.ModelType.DETR_SEGM,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     h_loader = detr.dataset.load(
         h_file,
         v_transforms,
-        return_masks=model_params.masks,
+        return_masks=model_params.model_type is detr.ModelType.DETR_SEGM,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         "DETR training and evaluation script", parents=[get_args_parser()]
     )
     parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--file-train", type=Path, required=True)
     parser.add_argument("--model", type=Path, required=True)
     args = parser.parse_args()
     main(args)

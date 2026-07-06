@@ -4,13 +4,13 @@ from detr.models.backbone import Backbone, Joiner
 from detr.models.detr import DETR
 from detr.models.position_encoding import PositionEmbeddingSine
 from detr.models.transformer import Transformer
-from detr.parameters import BackboneType
+from detr.parameters import ModelSubType
 
 
 def detr_resnet50():
     hidden_dim = 256
     backbone = Backbone(
-        BackboneType.RESNET50,
+        ModelSubType.RESNET50,
         train_backbone=True,
         return_interm_layers=False,
         dilation=False,

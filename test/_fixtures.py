@@ -87,7 +87,7 @@ def _make_coco_json(tmp_dir: Path, n_images: int = 4) -> dict:
 
 def _small_model_params() -> detr.parameters.Model:
     return detr.parameters.Model(
-        backbone=detr.parameters.BackboneType.RESNET50,
+        backbone=detr.parameters.ModelSubType.RESNET50,
         enc_layers=1,
         dec_layers=1,
         dim_feedforward=64,

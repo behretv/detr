@@ -8,17 +8,10 @@ from __future__ import annotations
 import argparse
 import types as _types
 from dataclasses import MISSING, dataclass, field, fields
-from enum import Enum
 from typing import Union, get_args, get_origin, get_type_hints
 
+from detr._types import ModelSubType, ModelType
 
-class BackboneType(Enum):
-    """Model subtypes for easier import export."""
-
-    RESNET50 = "resnet50"
-    RESNET50_DC5 = "resnet50_dc5"
-    RESNET101 = "resnet101"
-    RESNET101_DC5 = "resnet101_dc5"
 
 
 def _default_value(f):
@@ -111,8 +104,8 @@ class Train:
 
 @dataclass
 class Model:
-    backbone: BackboneType = field(
-        default=BackboneType.RESNET50,
+    backbone: ModelSubType = field(
+        default=ModelSubType.RESNET50,
         metadata={"help": "Name of the convolutional backbone to use"},
     )
     dilation: bool = field(
@@ -157,15 +150,13 @@ class Model:
         default=False,
         metadata={"help": "Whether to use pre-normalization in transformer"},
     )
-    masks: bool = field(
-        default=False,
-        metadata={"help": "Train segmentation head if the flag is provided"},
+    model_type: ModelType = field(
+        default=ModelType.DETR_BBOX,
+        metadata={"help": "Model type: DETR_BBOX for detection, DETR_SEGM for segmentation"},
     )
-    frozen_weights: str | None = field(
-        default=None,
-        metadata={
-            "help": "Path to the pretrained model. If set, only the mask head will be trained"
-        },
+    frozen: bool = field(
+        default=False,
+        metadata={"help": "Freeze the DETR backbone and only train the segmentation head"},
     )
     aux_loss: bool = field(
         default=True,
