@@ -4,6 +4,7 @@ Copyright (c) 2026 Munich University of Applied Sciences
 """
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -33,11 +34,14 @@ def model_bundle(device):
     model_params = _small_model_params()
     meta = detr.ModelMeta(
         categories=["ball"],
-        model_type=model_params.model_type,
-        subtype=model_params.backbone,
-        model_params=model_params,
-        loss_params=detr.parameters.Loss(),
+        dataset="test",
+        model_type=detr.ModelType.DETR_BBOX,
+        subtype=detr.ModelSubType.RESNET50,
         train_params=detr.parameters.Train(),
+        settings={
+            "model_params": asdict(model_params),
+            "loss_params": asdict(detr.parameters.Loss()),
+        },
     )
     bundle = detr.model.factory(meta)
     bundle.set_device(str(device))
@@ -91,7 +95,6 @@ def _make_coco_json(tmp_dir: Path, n_images: int = 4) -> dict:
 
 def _small_model_params() -> detr.parameters.Model:
     return detr.parameters.Model(
-        backbone=detr.parameters.ModelSubType.RESNET50,
         enc_layers=1,
         dec_layers=1,
         dim_feedforward=64,

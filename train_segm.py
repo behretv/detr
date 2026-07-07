@@ -13,6 +13,7 @@ Omit --model to fine-tune the full model end-to-end.
 
 import argparse
 import random
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -25,13 +26,15 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def main(args: argparse.Namespace):
+    """Entrypoint for segmentation training."""
+    t_file = args.file_train
+    v_file = t_file.with_name(t_file.name.replace("train", "valid"))
+    h_file = t_file.with_name("holdout.coco.json")
+
     train_params = detr.parameters.Train.from_args(args)
     model_params = detr.parameters.Model.from_args(args)
     loss_params = detr.parameters.Loss.from_args(args)
     aug_params = detr.parameters.Augmentation.from_args(args)
-
-    if model_params.model_type is not detr.ModelType.DETR_SEGM:
-        raise ValueError("model_type must be DETR_SEGM for segmentation training")
 
     torch.manual_seed(train_params.seed)
     np.random.seed(train_params.seed)
@@ -45,25 +48,25 @@ def main(args: argparse.Namespace):
     categories = detr.io.load_categories(args.file_train)
     meta = detr.ModelMeta(
         categories=categories,
-        model_type=model_params.model_type,
-        subtype=model_params.backbone,
-        model_params=model_params,
-        loss_params=loss_params,
+        dataset=str(t_file.relative_to(t_file.parents[1])),
+        model_type=detr.ModelType.DETR_SEGM,
+        subtype=detr.ModelSubType.RESNET50,
         train_params=train_params,
+        settings={
+            "model_params": asdict(model_params),
+            "loss_params": asdict(loss_params),
+        },
     )
-    bundle = detr.model.factory(meta)
-    bundle.set_device(DEVICE)
+    ai_model = detr.model.factory(meta)
+    ai_model.set_device(DEVICE)
 
     # Load pretrained detector weights into the DETR sub-module
     if args.model is not None:
         checkpoint = detr.io.load_checkpoint(args.model, device=DEVICE)
         state_dict = checkpoint.get("state_dict", checkpoint.get("model"))
-        bundle.ai.detr.load_state_dict(state_dict)
+        ai_model.ai.detr.load_state_dict(state_dict)
         logger.info(f"Loaded frozen weights from {args.model}")
 
-    t_file = args.file_train
-    v_file = t_file.with_name(t_file.name.replace("train", "valid"))
-    h_file = t_file.with_name("holdout.coco.json")
 
     t_transforms = detr.transforms.augmentation(aug_params)
     v_transforms = detr.transforms.default(aug_params)
@@ -90,8 +93,8 @@ def main(args: argparse.Namespace):
         num_workers=train_params.num_workers,
     )
 
-    bundle = detr.train.run(
-        bundle,
+    ai_model = detr.train.run(
+        ai_model,
         t_loader,
         v_loader,
         device=DEVICE,
@@ -99,11 +102,11 @@ def main(args: argparse.Namespace):
         v_file=v_file,
     )
 
-    outputs = detr.coco.inference(bundle, v_loader, device=DEVICE)
+    outputs = detr.coco.inference(ai_model, v_loader, device=DEVICE)
     stats = detr.coco.run_eval(v_file, outputs, iou_type="segm")
     logger.info(f"Validation metrics: {stats}")
 
-    outputs = detr.coco.inference(bundle, h_loader, device=DEVICE)
+    outputs = detr.coco.inference(ai_model, h_loader, device=DEVICE)
     stats = detr.coco.run_eval(h_file, outputs, iou_type="segm")
     logger.info(f"Holdout metrics: {stats}")
 
@@ -125,5 +128,4 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--file-train", type=Path, required=True)
     args = parser.parse_args()
-    args.model_type = detr.ModelType.DETR_SEGM  # force segmentation for this script
     main(args)

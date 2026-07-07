@@ -83,11 +83,10 @@ def load_model(
         categories=categories,
         model_type=ModelType(meta_data["model_type"]),
         subtype=ModelSubType(meta_data["subtype"]),
-        model_params=parameters.Model(**meta_data["model_params"]),
-        loss_params=parameters.Loss(**meta_data["loss_params"]),
         train_params=parameters.Train(**meta_data["train_params"]),
         transforms=meta_data["transforms"],
         train_info=meta_data["train_info"],
+        settings=meta_data["settings"],
         source=meta_data["source"],
     )
 
@@ -136,15 +135,18 @@ def load_model_legacy(
         raise ValueError(f"Unknown model type: {file}")
 
     metadata = ModelMeta(
+        categories=categories,
+        dataset="coco",
         model_type=ModelType.DETR_BBOX,
         subtype=subtype,
         source="legacy",
         transforms=detr.transforms.default(),
-        categories=categories,
         train_info={"logs": []},
-        model_params=model_params,
-        loss_params=loss_params,
         train_params=train_params,
+        settings={
+            "model_params": asdict(model_params),
+            "loss_params": asdict(loss_params),
+        },
     )
 
     ai_model = model.factory(metadata)

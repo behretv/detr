@@ -89,12 +89,17 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(model_params: parameters.Model, train_params: parameters.Train):
+def build_backbone(
+    model_params: parameters.Model,
+    train_params: parameters.Train,
+    subtype: parameters.ModelSubType,
+    model_type: parameters.ModelType,
+):
     position_embedding = build_position_encoding(model_params)
     train_backbone = train_params.lr_backbone > 0
-    return_interm_layers = model_params.model_type is parameters.ModelType.DETR_SEGM
+    return_interm_layers = model_type is parameters.ModelType.DETR_SEGM
     backbone = Backbone(
-        model_params.backbone,
+        subtype,
         train_backbone,
         return_interm_layers,
         model_params.dilation,

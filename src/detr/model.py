@@ -24,7 +24,7 @@ def factory(meta: ModelMeta) -> Model:
     train_params = meta.train_params
     num_classes = len(meta.categories)
 
-    backbone = build_backbone(model_params, train_params)
+    backbone = build_backbone(model_params, train_params, meta.subtype, meta.model_type)
     transformer = build_transformer(model_params)
 
     model = DETR(
@@ -34,12 +34,12 @@ def factory(meta: ModelMeta) -> Model:
         num_queries=model_params.num_queries,
         aux_loss=model_params.aux_loss,
     )
-    if model_params.model_type is ModelType.DETR_SEGM:
+    if meta.model_type is ModelType.DETR_SEGM:
         model = DETRsegm(model, freeze_detr=model_params.frozen)
     matcher = build_matcher(loss_params)
     weight_dict = {"loss_ce": 1, "loss_bbox": loss_params.bbox_loss_coef}
     weight_dict["loss_giou"] = loss_params.giou_loss_coef
-    if model_params.model_type is ModelType.DETR_SEGM:
+    if meta.model_type is ModelType.DETR_SEGM:
         weight_dict["loss_mask"] = loss_params.mask_loss_coef
         weight_dict["loss_dice"] = loss_params.dice_loss_coef
     # TODO this is a hack
@@ -50,7 +50,7 @@ def factory(meta: ModelMeta) -> Model:
         weight_dict.update(aux_weight_dict)
 
     losses = ["labels", "boxes", "cardinality"]
-    if model_params.model_type is ModelType.DETR_SEGM:
+    if meta.model_type is ModelType.DETR_SEGM:
         losses += ["masks"]
     criterion = SetCriterion(
         num_classes,
@@ -60,7 +60,7 @@ def factory(meta: ModelMeta) -> Model:
         losses=losses,
     )
     postprocessors = {"bbox": PostProcess()}
-    if model_params.model_type is ModelType.DETR_SEGM:
+    if meta.model_type is ModelType.DETR_SEGM:
         postprocessors["segm"] = PostProcessSegm()
 
     return Model(

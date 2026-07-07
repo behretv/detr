@@ -5,6 +5,7 @@ Copyright (c) 2026 Munich University of Applied Sciences
 
 import argparse
 import random
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -36,16 +37,29 @@ def main(args):
     random.seed(train_params.seed)
 
     categories = detr.io.load_categories(args.file_train)
+
+    t_file = args.file_train
+    v_file = t_file.with_name(t_file.name.replace("train", "valid"))
+    h_file = t_file.with_name("holdout.coco.json")
+
     if detr.io.is_legacy_model(args.model):
         logger.warning(f"Model {args.model} is in legacy format, converting...")
         model = detr.io.load_model_legacy(args.model, device=DEVICE, categories=categories)
     else:
         model = detr.io.load_model(args.model, device=DEVICE, categories=categories)
+    model.meta = detr.ModelMeta(
+        categories=categories,
+        dataset=str(t_file.relative_to(t_file.parents[1])),
+        model_type=model.meta.model_type,
+        subtype=model.meta.subtype,
+        train_params=train_params,
+        settings={
+            "model_params": asdict(model_params),
+            "aug_params": asdict(aug_params),
+        },
+    )
     logger.info(f"Training parameters: {model.meta.train_params}")
 
-    t_file = args.file_train
-    v_file = t_file.with_name(t_file.name.replace("train", "valid"))
-    h_file = t_file.with_name("holdout.coco.json")
 
     t_transforms = detr.transforms.augmentation(aug_params)
     v_transforms = detr.transforms.default()
@@ -53,21 +67,21 @@ def main(args):
     t_loader = detr.dataset.load(
         t_file,
         t_transforms,
-        return_masks=model_params.model_type is detr.ModelType.DETR_SEGM,
+        return_masks=model.meta.model_type is detr.ModelType.DETR_SEGM,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     v_loader = detr.dataset.load(
         v_file,
         v_transforms,
-        return_masks=model_params.model_type is detr.ModelType.DETR_SEGM,
+        return_masks=model.meta.model_type is detr.ModelType.DETR_SEGM,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )
     h_loader = detr.dataset.load(
         h_file,
         v_transforms,
-        return_masks=model_params.model_type is detr.ModelType.DETR_SEGM,
+        return_masks=model.meta.model_type is detr.ModelType.DETR_SEGM,
         batch_size=train_params.batch_size,
         num_workers=train_params.num_workers,
     )

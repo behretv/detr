@@ -37,16 +37,32 @@ class ModelMeta:
     """Metadata associated with a trained or loaded model."""
 
     categories: list[str]
+    dataset: str
     model_type: ModelType
     subtype: ModelSubType
-    model_params: parameters.Model
-    loss_params: parameters.Loss
     train_params: parameters.Train
     transforms: list[Any] = transforms.default()
     train_info: dict[str, Any] = field(
         default_factory=lambda: {"params": {}, "logs": []}
     )
+    settings: dict[str, Any] = field(default_factory=dict)
     source: str = ""
+
+    def __post_init__(self):
+        if "model_params" not in self.settings:
+            self.settings["model_params"] = {}
+        if "loss_params" not in self.settings:
+            self.settings["loss_params"] = {}
+
+    @property
+    def model_params(self) -> parameters.Model:
+        import detr.parameters as parameters
+        return parameters.Model(**self.settings["model_params"])
+
+    @property
+    def loss_params(self) -> parameters.Loss:
+        import detr.parameters as parameters
+        return parameters.Loss(**self.settings["loss_params"])
 
     def serialize4pth(self) -> dict:
         """Serialize the model meta data, including the attributes."""

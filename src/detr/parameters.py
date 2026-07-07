@@ -107,10 +107,6 @@ class Train:
 
 @dataclass
 class Model:
-    backbone: ModelSubType = field(
-        default=ModelSubType.RESNET50,
-        metadata={"help": "Name of the convolutional backbone to use"},
-    )
     dilation: bool = field(
         default=False,
         metadata={
@@ -152,10 +148,6 @@ class Model:
     pre_norm: bool = field(
         default=False,
         metadata={"help": "Whether to use pre-normalization in transformer"},
-    )
-    model_type: ModelType = field(
-        default=ModelType.DETR_BBOX,
-        metadata={"help": "Model type: DETR_BBOX for detection, DETR_SEGM for segmentation"},
     )
     frozen: bool = field(
         default=False,
