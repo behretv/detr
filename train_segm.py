@@ -42,17 +42,15 @@ def main(args: argparse.Namespace):
         model_params.frozen = True
 
     # Build model with segmentation head
-    categories = detr.dataset.categories(args.file_train)
+    categories = detr.io.load_categories(args.file_train)
     bundle = detr.model.factory(model_params, loss_params, train_params, categories)
     bundle.set_device(DEVICE)
 
     # Load pretrained detector weights into the DETR sub-module
     if args.model is not None:
-        checkpoint = torch.load(
-            args.model, map_location=DEVICE, weights_only=False
-        )
+        checkpoint = detr.io.load_checkpoint(args.model, device=DEVICE)
         state_dict = checkpoint.get("state_dict", checkpoint.get("model"))
-        bundle.ai_model.detr.load_state_dict(state_dict)
+        bundle.ai.detr.load_state_dict(state_dict)
         logger.info(f"Loaded frozen weights from {args.model}")
 
     t_file = args.file_train

@@ -76,13 +76,13 @@ def test_test_transforms():
 
 def test_forward_pass_shapes(model_bundle, train_loader, device):
     # Arrange
-    model_bundle.ai_model.eval()
+    model_bundle.ai.eval()
     samples, _ = next(iter(train_loader))
     samples = samples.to(device)
 
     # Act
     with torch.no_grad():
-        out = model_bundle.ai_model(samples)
+        out = model_bundle.ai(samples)
     bs = samples.tensors.shape[0]
 
     # Assert
@@ -94,14 +94,14 @@ def test_forward_pass_shapes(model_bundle, train_loader, device):
 
 def test_loss_is_finite(model_bundle, train_loader, device):
     # Arrange
-    model_bundle.ai_model.train()
+    model_bundle.ai.train()
     model_bundle.criterion.train()
     samples, targets = next(iter(train_loader))
     samples = samples.to(device)
     targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
     # Act
-    loss_dict = model_bundle.criterion(model_bundle.ai_model(samples), targets)
+    loss_dict = model_bundle.criterion(model_bundle.ai(samples), targets)
 
     # Assert
     for name, val in loss_dict.items():
@@ -110,11 +110,11 @@ def test_loss_is_finite(model_bundle, train_loader, device):
 
 def test_train_one_epoch_runs(model_bundle, train_loader, device):
     # Arrange
-    optimizer = torch.optim.AdamW(model_bundle.ai_model.parameters(), lr=1e-4)
+    optimizer = torch.optim.AdamW(model_bundle.ai.parameters(), lr=1e-4)
 
     # Act
     stats = train_one_epoch(
-        model_bundle.ai_model,
+        model_bundle.ai,
         model_bundle.criterion,
         train_loader,
         optimizer,

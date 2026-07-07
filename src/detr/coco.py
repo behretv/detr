@@ -14,7 +14,7 @@ from . import model
 
 
 def inference(
-    model_data: model.Bundle, loader: torch.utils.data.DataLoader, device: str
+    model_data: model.Model, loader: torch.utils.data.DataLoader, device: str
 ) -> list:
     """Runs COCO evaluation and prints results to stdout.
 
@@ -22,7 +22,7 @@ def inference(
         model: A PyTorch instance segmentation model.
         data_loader: A PyTorch data loader for the COCO dataset.
     """
-    ai_model = model_data.ai_model
+    ai_model = model_data.ai
     ai_model.to(device)
     ai_model.eval()
 

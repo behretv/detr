@@ -13,8 +13,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from detr import coco
-from detr._types import ModelType
-from detr.model import Bundle
+from detr._types import Model, ModelType
 from detr.parameters import Train
 
 
@@ -73,23 +72,23 @@ def train_one_epoch(
 
 
 def run(
-    bundle: Bundle,
+    model: Model,
     train_loader: Iterable,
     val_loader: Iterable,
     device: str,
     params: Train | None = None,
     v_file: Path | None = None,
-) -> Bundle:
-    """Train *bundle* for the given number of epochs and return an updated bundle.
+) -> Model:
+    """Train *model* for the given number of epochs and return an updated model.
 
-    The original bundle is not mutated — a shallow copy is returned with the
+    The original model is not mutated — a shallow copy is returned with the
     newly trained weights and accumulated logs.
 
     Parameters
     ----------
-    bundle:
-        A :class:`~detr.model.Bundle` produced by ``Bundle.build`` or
-        ``Bundle.load_from_file``.
+    model:
+        A :class:`~detr._types.Model` produced by ``detr.model.factory`` or
+        ``detr.io.load_model``.
     train_loader:
         DataLoader yielding ``(NestedTensor, targets)`` batches for training.
     val_loader:
@@ -102,28 +101,28 @@ def run(
 
     Returns
     -------
-    Bundle
-        A new ``Bundle`` with updated weights and ``logs`` appended.
+    Model
+        A new ``Model`` with updated weights and ``logs`` appended.
     """
     if params is None:
         params = Train()
 
-    # Work on a copy so the caller's bundle is not mutated
-    new_model = copy.copy(bundle)
-    new_model.meta.train_info["logs"] = list(bundle.meta.train_info["logs"])
+    # Work on a copy so the caller's model is not mutated
+    new_model = copy.copy(model)
+    new_model.meta.train_info["logs"] = list(model.meta.train_info["logs"])
 
     param_dicts = [
         {
             "params": [
                 p
-                for n, p in new_model.ai_model.named_parameters()
+                for n, p in new_model.ai.named_parameters()
                 if "backbone" not in n and p.requires_grad
             ]
         },
         {
             "params": [
                 p
-                for n, p in new_model.ai_model.named_parameters()
+                for n, p in new_model.ai.named_parameters()
                 if "backbone" in n and p.requires_grad
             ],
             "lr": params.lr_backbone,
@@ -137,7 +136,7 @@ def run(
     start_time = time.time()
     for epoch in tqdm(range(params.epochs), desc="Epochs", position=1, leave=True):
         train_stats = train_one_epoch(
-            new_model.ai_model,
+            new_model.ai,
             new_model.criterion,
             train_loader,
             optimizer,
@@ -149,7 +148,7 @@ def run(
 
         if v_file is not None:
             outputs = coco.inference(new_model, val_loader, device)
-            iou_type = "segm" if new_model.model_params.model_type is ModelType.DETR_SEGM else "bbox"
+            iou_type = "segm" if new_model.meta.model_params.model_type is ModelType.DETR_SEGM else "bbox"
             val_stats = coco.run_eval(v_file, outputs, iou_type)
         else:
             val_stats = {}

@@ -35,9 +35,9 @@ def main(args):
     np.random.seed(train_params.seed)
     random.seed(train_params.seed)
 
-    categories = detr.dataset.categories(args.file_train)
-    bundle = detr.model.load_from_file(args.model, device=DEVICE, categories=categories)
-    logger.info(f"Training parameters: {bundle.train_params}")
+    categories = detr.io.load_categories(args.file_train)
+    bundle = detr.io.load_model(args.model, device=DEVICE, categories=categories)
+    logger.info(f"Training parameters: {bundle.meta.train_params}")
 
     t_file = args.file_train
     v_file = t_file.with_name(t_file.name.replace("train", "valid"))
@@ -87,8 +87,8 @@ def main(args):
     logger.info(f"Holdout metrics: {stats}")
 
     if args.output_dir:
-        filename = detr.model.filename(args.output_dir, bundle.name)
-        bundle.export(filename)
+        filename = detr.io.output_filename(args.output_dir, bundle.name)
+        detr.io.save_model(bundle, filename)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
-from detr import augmentation, coco, dataset, model, parameters, train, transforms
-from detr._types import ModelMeta, ModelSubType, ModelType
-from detr.model import Bundle
+from detr import augmentation, coco, dataset, io, model, parameters, train, transforms
+from detr._types import Model, ModelMeta, ModelSubType, ModelType
 
 __all__ = [
     "augmentation",
     "coco",
     "dataset",
+    "io",
     "model",
     "parameters",
     "train",
@@ -13,5 +13,5 @@ __all__ = [
     "ModelSubType",
     "ModelType",
     "ModelMeta",
-    "Bundle",
+    "Model",
 ]
