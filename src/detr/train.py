@@ -148,7 +148,7 @@ def run(
 
         if v_file is not None:
             outputs = coco.inference(new_model, val_loader, device)
-            iou_type = "segm" if new_model.meta.model_params.model_type is ModelType.DETR_SEGM else "bbox"
+            iou_type = "segm" if new_model.meta.model_type is ModelType.DETR_SEGM else "bbox"
             val_stats = coco.run_eval(v_file, outputs, iou_type)
         else:
             val_stats = {}

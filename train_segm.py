@@ -43,7 +43,15 @@ def main(args: argparse.Namespace):
 
     # Build model with segmentation head
     categories = detr.io.load_categories(args.file_train)
-    bundle = detr.model.factory(model_params, loss_params, train_params, categories)
+    meta = detr.ModelMeta(
+        categories=categories,
+        model_type=model_params.model_type,
+        subtype=model_params.backbone,
+        model_params=model_params,
+        loss_params=loss_params,
+        train_params=train_params,
+    )
+    bundle = detr.model.factory(meta)
     bundle.set_device(DEVICE)
 
     # Load pretrained detector weights into the DETR sub-module

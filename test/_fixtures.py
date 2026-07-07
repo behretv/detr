@@ -31,11 +31,15 @@ def device():
 @pytest.fixture(scope="session")
 def model_bundle(device):
     model_params = _small_model_params()
-    bundle = detr.model.factory(
+    meta = detr.ModelMeta(
+        categories=["ball"],
+        model_type=model_params.model_type,
+        subtype=model_params.backbone,
         model_params=model_params,
         loss_params=detr.parameters.Loss(),
         train_params=detr.parameters.Train(),
     )
+    bundle = detr.model.factory(meta)
     bundle.set_device(str(device))
     return bundle
 

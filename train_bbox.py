@@ -36,8 +36,12 @@ def main(args):
     random.seed(train_params.seed)
 
     categories = detr.io.load_categories(args.file_train)
-    bundle = detr.io.load_model(args.model, device=DEVICE, categories=categories)
-    logger.info(f"Training parameters: {bundle.meta.train_params}")
+    if detr.io.is_legacy_model(args.model):
+        logger.warning(f"Model {args.model} is in legacy format, converting...")
+        model = detr.io.load_model_legacy(args.model, device=DEVICE, categories=categories)
+    else:
+        model = detr.io.load_model(args.model, device=DEVICE, categories=categories)
+    logger.info(f"Training parameters: {model.meta.train_params}")
 
     t_file = args.file_train
     v_file = t_file.with_name(t_file.name.replace("train", "valid"))
@@ -68,9 +72,9 @@ def main(args):
         num_workers=train_params.num_workers,
     )
 
-    bundle.set_device(DEVICE)
-    bundle = detr.train.run(
-        bundle,
+    model.set_device(DEVICE)
+    model = detr.train.run(
+        model,
         t_loader,
         v_loader,
         device=DEVICE,
@@ -78,17 +82,17 @@ def main(args):
         v_file=v_file,
     )
 
-    outputs = detr.coco.inference(bundle, v_loader, device=DEVICE)
+    outputs = detr.coco.inference(model, v_loader, device=DEVICE)
     stats = detr.coco.run_eval(v_file, outputs, iou_type="bbox")
     logger.info(f"Validation metrics: {stats}")
 
-    outputs = detr.coco.inference(bundle, h_loader, device=DEVICE)
+    outputs = detr.coco.inference(model, h_loader, device=DEVICE)
     stats = detr.coco.run_eval(h_file, outputs, iou_type="bbox")
     logger.info(f"Holdout metrics: {stats}")
 
     if args.output_dir:
-        filename = detr.io.output_filename(args.output_dir, bundle.name)
-        detr.io.save_model(bundle, filename)
+        filename = detr.io.output_filename(args.output_dir, model.name)
+        detr.io.save_model(model, filename)
 
 
 if __name__ == "__main__":

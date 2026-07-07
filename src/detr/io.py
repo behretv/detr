@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import pprint
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -10,8 +12,20 @@ from loguru import logger
 
 import detr
 import detr.parameters as parameters
-from detr._types import Model
-from detr.model import factory
+from detr._types import Model, ModelSubType, ModelType, ModelMeta
+from detr import model
+
+_MODEL_TYPES = "|".join(t.value for t in ModelType)
+_MODEL_SUBTYPES = "|".join(s.value for s in ModelSubType)
+_NEW_NAMING_RE = re.compile(
+    rf"^({_MODEL_TYPES})_({_MODEL_SUBTYPES})_\d{{2}}$"
+)
+
+
+def is_legacy_model(file: Path) -> bool:
+    """Return True if *file* does not follow the ``<ModelType>_<ModelSubType>_xx`` naming scheme."""
+    stem = Path(file).stem
+    return _NEW_NAMING_RE.match(stem) is None
 
 
 def load_categories(ann_file: Path) -> list[str]:
@@ -45,6 +59,7 @@ def save_model(model: Model, file: Path) -> None:
     )
 
 
+
 def load_model(
     file: Path,
     device: str,
@@ -63,23 +78,100 @@ def load_model(
     logger.info(f"Loading model from {file}")
     model_data = torch.load(file, map_location=device, weights_only=False)
 
-    meta_data = model_data.get("meta", {})
-    model_params: parameters.Model = parameters.Model(
-        **meta_data.get("model_params", model_data.get("model_params", {}))
-    )
-    loss_params: parameters.Loss = parameters.Loss(
-        **meta_data.get("loss_params", model_data.get("loss_params", {}))
-    )
-    train_params: parameters.Train = parameters.Train(
-        **meta_data.get("train_params", model_data.get("train_params", {}))
+    meta_data = model_data["meta"]
+    meta = ModelMeta(
+        categories=categories,
+        model_type=ModelType(meta_data["model_type"]),
+        subtype=ModelSubType(meta_data["subtype"]),
+        model_params=parameters.Model(**meta_data["model_params"]),
+        loss_params=parameters.Loss(**meta_data["loss_params"]),
+        train_params=parameters.Train(**meta_data["train_params"]),
+        transforms=meta_data["transforms"],
+        train_info=meta_data["train_info"],
+        source=meta_data["source"],
     )
 
-    model = factory(model_params, loss_params, train_params, categories)
+    ai_model = model.factory(meta)
 
-    state_dict = model_data.get("state_dict") or model_data.get("model")
+    _load_state_dict(ai_model, model_data["state_dict"])
+
+    return ai_model
+
+
+def load_model_legacy(
+    file: Path,
+    device: str,
+    categories: list[str],
+    *,
+    model_params: parameters.Model = parameters.Model(),
+    loss_params: parameters.Loss = parameters.Loss(),
+    train_params: parameters.Train = parameters.Train(),
+) -> Model:
+    """Reconstruct a ``Model`` from a legacy ``.pth`` checkpoint.
+
+    Legacy models just contain the model state dict, so we need to
+    reconstruct the model from the state dict and the provided parameters.
+    ----------
+    file:
+        Path to the legacy ``.pth`` file.
+    device:
+        Device to map tensors to when loading.
+    categories:
+        Category names for the dataset (used to build the model).
+    """
+    logger.info(f"Loading legacy model from {file}")
+    model_data = torch.load(file, map_location=device, weights_only=False)
+    logger.debug(f"Model structure:\n{pprint.pformat(model_data, depth=3, compact=True)}")
+
+    # Extract metadata
+    if "-r50" in file.stem and not "-dc" in file.stem:
+        subtype = ModelSubType.RESNET50
+    elif "-r50" in file.stem and "-dc" in file.stem:
+        subtype = ModelSubType.RESNET50_DC5
+    elif "-r101" in file.stem and not "-dc" in file.stem:
+        subtype = ModelSubType.RESNET101
+    elif "-r101" in file.stem and "-dc" in file.stem:
+        subtype = ModelSubType.RESNET101_DC5
+    else:
+        raise ValueError(f"Unknown model type: {file}")
+
+    metadata = ModelMeta(
+        model_type=ModelType.DETR_BBOX,
+        subtype=subtype,
+        source="legacy",
+        transforms=detr.transforms.default(),
+        categories=categories,
+        train_info={"logs": []},
+        model_params=model_params,
+        loss_params=loss_params,
+        train_params=train_params,
+    )
+
+    ai_model = model.factory(metadata)
+
+    state_dict = model_data.get("model")
     if state_dict is None:
-        raise KeyError(f"Checkpoint {file} has neither 'state_dict' nor 'model' key")
+        raise KeyError(f"Checkpoint {file} has no 'model' key")
 
+    _load_state_dict(ai_model, state_dict)
+
+    return ai_model
+
+
+def output_filename(dir_output: Path, name: str) -> Path:
+    """Add a suffix with an index if the output folder already exists."""
+    suffix = "pth"
+    file_new = dir_output / f"{name}_00.{suffix}"
+    for idx in range(1, 99, 1):
+        if not file_new.exists():
+            logger.info(f"Output file: {file_new}")
+            return file_new
+        file_new = dir_output / f"{name}_{idx:02d}.{suffix}"
+
+    raise ValueError("Unable to find a non-existing output file!")
+
+def _load_state_dict(model: Model, state_dict: dict) -> None:
+    """Load *state_dict* into *model.ai*, skipping shape-mismatched keys."""
     model_state = model.ai.state_dict()
     incompatible = {
         k for k, v in state_dict.items()
@@ -96,28 +188,3 @@ def load_model(
         logger.warning(
             f"load_state_dict (strict=False) — missing: {missing}, unexpected: {unexpected}"
         )
-
-    model.meta.source = meta_data.get("source", str(file))
-    model.meta.transforms = meta_data.get(
-        "transforms", model_data.get("transforms", detr.transforms.default())
-    )
-    model.meta.categories = meta_data.get(
-        "categories", model_data.get("cats", {})
-    )
-    model.meta.train_info = meta_data.get(
-        "train_info", {"params": {}, "logs": []}
-    )
-    return model
-
-
-def output_filename(dir_output: Path, name: str) -> Path:
-    """Add a suffix with an index if the output folder already exists."""
-    suffix = "pth"
-    file_new = dir_output / f"{name}_00.{suffix}"
-    for idx in range(1, 99, 1):
-        if not file_new.exists():
-            logger.info(f"Output file: {file_new}")
-            return file_new
-        file_new = dir_output / f"{name}_{idx:02d}.{suffix}"
-
-    raise ValueError("Unable to find a non-existing output file!")
